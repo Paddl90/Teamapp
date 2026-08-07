@@ -9,12 +9,13 @@ import { colors } from '@/theme/colors';
 
 export default function AcceptInviteScreen() {
   const router = useRouter();
-  const { session } = useAuth();
+  const { isLoading: isAuthLoading, session } = useAuth();
   const { refresh } = useWorkspace();
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  if (isAuthLoading) return null;
   if (!session) return <Redirect href="/sign-in" />;
 
   const accept = async () => {

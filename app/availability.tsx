@@ -15,7 +15,7 @@ const toIso = (value: string) => new Date(value).toISOString();
 const formatDate = (value: string) => new Intl.DateTimeFormat('de-DE', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
 
 export default function AvailabilityScreen() {
-  const { session } = useAuth();
+  const { isLoading: isAuthLoading, session } = useAuth();
   const { activeWorkspace, isLoading: isWorkspaceLoading } = useWorkspace();
   const [blocks, setBlocks] = useState<BlockView[]>([]);
   const [blockStart, setBlockStart] = useState('2026-08-12T17:00');
@@ -77,6 +77,7 @@ export default function AvailabilityScreen() {
     setIsSubmitting(false);
   };
 
+  if (isAuthLoading) return null;
   if (!session) return <Redirect href="/sign-in" />;
   if (!isWorkspaceLoading && !activeWorkspace) return <Redirect href="/setup" />;
 

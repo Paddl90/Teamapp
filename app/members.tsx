@@ -39,7 +39,7 @@ type InvitationView = { id: string; email: string; code: string; status: string 
 type GuardianLink = { id: string; guardian_membership_id: string; child_membership_id: string };
 
 export default function MembersScreen() {
-  const { session } = useAuth();
+  const { isLoading: isAuthLoading, session } = useAuth();
   const { activeWorkspace, isLoading: isWorkspaceLoading } = useWorkspace();
   const [members, setMembers] = useState<MemberView[]>([]);
   const [invitations, setInvitations] = useState<InvitationView[]>([]);
@@ -241,6 +241,7 @@ export default function MembersScreen() {
     setGuardianId(''); setChildId(''); await load();
   };
 
+  if (isAuthLoading) return null;
   if (!session) return <Redirect href="/sign-in" />;
   if (!isWorkspaceLoading && !activeWorkspace) return <Redirect href="/setup" />;
 

@@ -20,7 +20,10 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: PropsWithChildren) {
   const [session, setSession] = useState<Session | null>(null);
-  const [isLoading, setIsLoading] = useState(Boolean(supabase));
+  // Start in a loading state on every platform. During static web rendering the
+  // browser client is unavailable, so deriving this from `supabase` would emit
+  // an authentication redirect into protected route HTML before hydration.
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     if (!supabase) {
