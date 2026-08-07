@@ -13,6 +13,7 @@ const eventTypeLabels: Record<string, string> = {
 };
 const responseLabels: Record<string, string> = { yes: 'Dabei', maybe: 'Vielleicht', no: 'Nicht dabei' };
 const recurrenceOptions = [{ value: 'none', label: 'Einmalig' }, { value: 'weekly', label: 'Wöchentlich' }] as const;
+const attendanceLabels: Record<string, string> = { present: 'Anwesend', excused: 'Entschuldigt', unexcused: 'Unentschuldigt', injured: 'Verletzt' };
 
 type EventView = {
   id: string;
@@ -32,7 +33,9 @@ type EventView = {
   no: number;
   total: number;
   responders: Array<{ membershipId: string; name: string; response: string | null }>;
+  participants: Array<{ membershipId: string; name: string; attendance: string | null }>;
 };
+type PenaltyItem = { id: string; team_id: string; title: string; amount_cents: number };
 
 const toIso = (value: string) => new Date(value).toISOString();
 const optionalIso = (value: string) => value.trim() ? toIso(value) : null;
@@ -57,6 +60,8 @@ export default function EventsScreen() {
   const [recurrence, setRecurrence] = useState('none');
   const [recurrenceEndsOn, setRecurrenceEndsOn] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [penaltyCatalog, setPenaltyCatalog] = useState<PenaltyItem[]>([]);
+  const [attendancePenalty, setAttendancePenalty] = useState<Record<string, string>>({});
   const [selectedTeams, setSelectedTeams] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -84,7 +89,7 @@ export default function EventsScreen() {
     ];
     const { data: eventRows, error: eventError } = await supabase
       .from('events')
-      .select('id, title, event_type, starts_at, ends_at, location, notes, response_deadline, meeting_at, meeting_location, recurrence_group_id, event_teams(team_id), event_responses(membership_id, response)')
+      .select('id, title, event_type, starts_at, ends_at, location, notes, response_deadline, meeting_at, meeting_location, recurrence_group_id, event_teams(team_id), event_responses(membership_id, response), event_attendance(membership_id,status)')
       .eq('cohort_id', activeWorkspace.cohortId)
       .neq('status', 'cancelled')
       .order('starts_at');
@@ -99,6 +104,13 @@ export default function EventsScreen() {
     const { data: participantRows } = teamIds.length
       ? await supabase.from('team_memberships').select('team_id, membership_id').in('team_id', teamIds)
       : { data: [] };
+    const participantMembershipIds = [...new Set((participantRows ?? []).map((row) => row.membership_id))];
+    const { data: participantMembers } = participantMembershipIds.length ? await supabase.from('memberships').select('id,profile_id').in('id',participantMembershipIds) : { data: [] };
+    const participantProfileIds = (participantMembers ?? []).map((row) => row.profile_id);
+    const { data: participantProfiles } = participantProfileIds.length ? await supabase.from('profiles').select('id,display_name').in('id',participantProfileIds) : { data: [] };
+    const participantName = (membershipId: string) => { const member=(participantMembers ?? []).find((row)=>row.id===membershipId); return (participantProfiles ?? []).find((profile)=>profile.id===member?.profile_id)?.display_name ?? 'Unbekannt'; };
+    const { data: catalogRows } = await supabase.from('penalty_catalog').select('id,team_id,title,amount_cents').in('team_id',activeWorkspace.teams.map((team)=>team.id)).eq('active',true).order('title');
+    setPenaltyCatalog((catalogRows ?? []) as PenaltyItem[]);
 
     setEvents((eventRows ?? []).map((event) => {
       const targets = (event.event_teams ?? []).map((team) => team.team_id);
@@ -122,6 +134,7 @@ export default function EventsScreen() {
         no: responses.filter((row) => row.response === 'no').length,
         total: participantIds.size,
         responders: identities.filter((identity) => participantIds.has(identity.membershipId)).map((identity) => ({ ...identity, response: responses.find((row) => row.membership_id === identity.membershipId)?.response ?? null })),
+        participants: [...participantIds].map((membershipId) => ({ membershipId, name: participantName(membershipId), attendance: (event.event_attendance ?? []).find((row) => row.membership_id === membershipId)?.status ?? null })).sort((a,b)=>a.name.localeCompare(b.name,'de')),
       };
     }));
     setIsLoading(false);
@@ -205,6 +218,18 @@ export default function EventsScreen() {
     setIsSubmitting(false);
   };
 
+  const initializeAttendance = async (eventId: string) => {
+    if (!supabase) return; setIsSubmitting(true); setError(null);
+    const { error: attendanceError } = await supabase.rpc('initialize_event_attendance',{target_event_id:eventId});
+    setIsSubmitting(false); if(attendanceError)setError(attendanceError.message);else await load();
+  };
+
+  const setAttendance = async (eventId: string, membershipId: string, status: string) => {
+    if (!supabase) return; setIsSubmitting(true); setError(null);
+    const { error: attendanceError } = await supabase.rpc('set_event_attendance',{target_event_id:eventId,target_membership_id:membershipId,new_status:status,target_penalty_catalog_id:status==='unexcused'?(attendancePenalty[eventId]||null):null});
+    setIsSubmitting(false); if(attendanceError)setError(attendanceError.message);else await load();
+  };
+
   if (!session) return <Redirect href="/sign-in" />;
   if (!isWorkspaceLoading && !activeWorkspace) return <Redirect href="/setup" />;
 
@@ -265,6 +290,10 @@ export default function EventsScreen() {
               {event.responders.length ? event.responders.map((responder) => { const deadlinePassed = Boolean(event.responseDeadline && new Date(event.responseDeadline) < new Date()); return <View key={responder.membershipId} style={styles.responderBlock}><Text style={styles.responderName}>Rückmeldung für {responder.name}</Text>{deadlinePassed ? <Text style={styles.deadlinePassed}>Zusagefrist abgelaufen</Text> : <View style={styles.responseRow}>{Object.entries(responseLabels).map(([value, label]) => (
                 <Pressable accessibilityRole="button" key={value} onPress={() => respond(event.id, responder.membershipId, value)} style={[styles.responseButton, responder.response === value && styles.responseActive]}><Text style={[styles.responseText, responder.response === value && styles.responseTextActive]}>{label}</Text></Pressable>
               ))}</View>}</View>; }) : <Text style={styles.notTargeted}>Weder du noch ein betreutes Kind seid diesem Termin zugeordnet.</Text>}
+              {canManage && event.teamIds.every((id) => manageableTeamIds.includes(id)) ? <View style={styles.attendanceBox}><View style={styles.attendanceHeader}><View><Text style={styles.attendanceTitle}>Tatsächliche Anwesenheit</Text><Text style={styles.helper}>Zusagen können übernommen und danach einzeln korrigiert werden.</Text></View><Pressable accessibilityRole="button" onPress={()=>initializeAttendance(event.id)} style={styles.secondaryButton}><Text style={styles.secondaryText}>Zusagen übernehmen</Text></Pressable></View>
+                {penaltyCatalog.some((item)=>event.teamIds.includes(item.team_id)) ? <><Text style={styles.miniLabel}>Optionale Strafe bei „Unentschuldigt“</Text><View style={styles.choiceRow}><Pressable accessibilityRole="radio" accessibilityState={{checked:!attendancePenalty[event.id]}} onPress={()=>setAttendancePenalty((current)=>({...current,[event.id]:''}))} style={[styles.miniChoice,!attendancePenalty[event.id]&&styles.miniChoiceActive]}><Text style={styles.miniChoiceText}>Keine</Text></Pressable>{penaltyCatalog.filter((item)=>event.teamIds.includes(item.team_id)).map((item)=><Pressable accessibilityRole="radio" accessibilityState={{checked:attendancePenalty[event.id]===item.id}} key={item.id} onPress={()=>setAttendancePenalty((current)=>({...current,[event.id]:item.id}))} style={[styles.miniChoice,attendancePenalty[event.id]===item.id&&styles.miniChoiceActive]}><Text style={styles.miniChoiceText}>{item.title} · {(item.amount_cents/100).toFixed(2)} €</Text></Pressable>)}</View></>:null}
+                {event.participants.map((participant)=><View key={`attendance:${event.id}:${participant.membershipId}`} style={styles.attendanceRow}><View><Text style={styles.participantName}>{participant.name}</Text><Text style={styles.currentAttendance}>{participant.attendance ? attendanceLabels[participant.attendance] : 'Noch nicht erfasst'}</Text></View><View style={styles.attendanceActions}>{Object.entries(attendanceLabels).map(([value,label])=><Pressable accessibilityRole="button" key={value} onPress={()=>setAttendance(event.id,participant.membershipId,value)} style={[styles.attendanceButton,participant.attendance===value&&styles.attendanceActive]}><Text style={[styles.attendanceButtonText,participant.attendance===value&&styles.attendanceActiveText]}>{label}</Text></Pressable>)}</View></View>)}
+              </View>:null}
               {canManage && event.teamIds.every((id) => manageableTeamIds.includes(id)) ? <View style={styles.manageActions}><Pressable accessibilityRole="button" onPress={() => beginEdit(event)} style={styles.secondaryButton}><Text style={styles.secondaryText}>Bearbeiten</Text></Pressable><Pressable accessibilityRole="button" onPress={() => cancelEvent(event.id)} style={styles.cancelButton}><Text style={styles.cancelText}>Absagen</Text></Pressable></View> : null}
             </View>
           ))}
@@ -286,4 +315,5 @@ const styles = StyleSheet.create({
   details: { backgroundColor: colors.canvas, borderRadius: 10, gap: 4, marginTop: 11, padding: 10 }, detailText: { color: colors.muted, fontSize: 12, fontWeight: '700' }, seriesTag: { color: colors.blue, fontSize: 10, fontWeight: '900' },
   deadlinePassed: { color: '#b42318', fontSize: 11, fontWeight: '800', marginTop: 5 }, formActions: { alignItems: 'center', flexDirection: 'row', flexWrap: 'wrap', gap: 9, justifyContent: 'flex-end', marginTop: 18 }, formPrimary: { flex: 1, marginTop: 0 },
   secondaryButton: { borderColor: colors.border, borderRadius: 11, borderWidth: 1, padding: 13 }, secondaryText: { color: colors.ink, fontSize: 12, fontWeight: '800' }, manageActions: { flexDirection: 'row', gap: 8, justifyContent: 'flex-end', marginTop: 13 }, cancelButton: { borderColor: '#fda29b', borderRadius: 11, borderWidth: 1, padding: 13 }, cancelText: { color: '#b42318', fontSize: 12, fontWeight: '800' },
+  attendanceBox:{backgroundColor:colors.canvas,borderRadius:13,marginTop:15,padding:14},attendanceHeader:{alignItems:'center',flexDirection:'row',flexWrap:'wrap',gap:10,justifyContent:'space-between'},attendanceTitle:{color:colors.ink,fontSize:14,fontWeight:'900'},miniLabel:{color:colors.muted,fontSize:11,fontWeight:'800',marginTop:12},miniChoice:{borderColor:colors.border,borderRadius:999,borderWidth:1,marginTop:7,paddingHorizontal:9,paddingVertical:6},miniChoiceActive:{backgroundColor:colors.blueSoft,borderColor:colors.blue},miniChoiceText:{color:colors.ink,fontSize:10,fontWeight:'800'},attendanceRow:{alignItems:'center',borderTopColor:colors.border,borderTopWidth:1,flexDirection:'row',flexWrap:'wrap',gap:10,justifyContent:'space-between',marginTop:12,paddingTop:12},participantName:{color:colors.ink,fontSize:13,fontWeight:'900'},currentAttendance:{color:colors.muted,fontSize:10,marginTop:3},attendanceActions:{flexDirection:'row',flexWrap:'wrap',gap:5},attendanceButton:{backgroundColor:colors.surface,borderColor:colors.border,borderRadius:8,borderWidth:1,paddingHorizontal:8,paddingVertical:6},attendanceActive:{backgroundColor:colors.ink,borderColor:colors.ink},attendanceButtonText:{color:colors.muted,fontSize:10,fontWeight:'800'},attendanceActiveText:{color:colors.surface},
 });
