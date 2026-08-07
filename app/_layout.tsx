@@ -30,6 +30,7 @@ export default function RootLayout() {
         <Stack.Screen name="matchday" options={{ title: 'Spieltagsaufstellung' }} />
         <Stack.Screen name="funds" options={{ title: 'Mannschaftskasse' }} />
         <Stack.Screen name="statistics" options={{ title: 'Statistik' }} />
+        <Stack.Screen name="training" options={{ title: 'Individuelles Training' }} />
         <Stack.Screen name="accept-invite" options={{ title: 'Einladung annehmen' }} />
         <Stack.Screen name="dashboard" options={{ headerShown: false }} />
         </Stack>
