@@ -36,3 +36,5 @@ docker compose --env-file deploy/.env.vps -f deploy/compose.vps.yml logs --tail=
 ```
 
 Die lokale Supabase-Umgebung ist ausschliesslich fuer Entwicklung und den privaten Pilotbetrieb gedacht. Vor einer Freigabe fuer weitere Vereinsmitglieder wird auf eine gehaertete, TLS-geschuetzte Self-Hosting-Konfiguration umgestellt.
+
+Um auf dem 8-GB-Pilotserver ausreichend Reserve zu halten, sind Analytics, Vector-Speicher und Edge Runtime deaktiviert. Sie koennen spaeter gezielt aktiviert werden.
