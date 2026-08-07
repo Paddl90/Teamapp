@@ -48,13 +48,14 @@ export default function SquadScreen() {
       membershipIds.length ? supabase.from('member_positions').select('membership_id, position_code, priority').in('membership_id', membershipIds) : Promise.resolve({ data: [] }),
       supabase.from('team_position_targets').select('team_id, position_code, target_count').in('team_id', activeWorkspace.teams.map((team) => team.id)),
     ]);
-    const playerMembershipIds = new Set((assignmentsResult.data ?? []).filter((row) => ((row.team_membership_roles ?? []) as Array<{ role: string }>).some((role) => role.role === 'player')).map((row) => row.membership_id));
+    const playerAssignments = (assignmentsResult.data ?? []).filter((row) => ((row.team_membership_roles ?? []) as Array<{ role: string }>).some((role) => role.role === 'player'));
+    const playerMembershipIds = new Set(playerAssignments.map((row) => row.membership_id));
     setPlayers((membershipRows ?? []).filter((member) => playerMembershipIds.has(member.id)).map((member) => {
       const memberPositions = (positionsResult.data ?? []).filter((row) => row.membership_id === member.id);
       return {
         membershipId: member.id,
         name: (profilesResult.data ?? []).find((profile) => profile.id === member.profile_id)?.display_name ?? 'Unbenannt',
-        teamIds: [...new Set((assignmentsResult.data ?? []).filter((row) => row.membership_id === member.id && activeWorkspace.teams.some((team) => team.id === row.team_id)).map((row) => row.team_id))],
+        teamIds: [...new Set(playerAssignments.filter((row) => row.membership_id === member.id && activeWorkspace.teams.some((team) => team.id === row.team_id)).map((row) => row.team_id))],
         primary: memberPositions.find((row) => row.priority === 'primary')?.position_code ?? null,
         secondary: memberPositions.find((row) => row.priority === 'secondary')?.position_code ?? null,
       };
