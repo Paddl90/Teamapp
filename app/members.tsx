@@ -29,9 +29,10 @@ const roleLabels: Record<string, string> = {
 type MemberView = {
   id: string;
   name: string;
+  birthDate: string;
   status: string;
   clubRoles: string[];
-  teams: Array<{ name: string; roles: string[] }>;
+  teams: Array<{ id: string; name: string; roles: string[] }>;
 };
 
 type InvitationView = { id: string; email: string; code: string; status: string };
@@ -44,6 +45,10 @@ export default function MembersScreen() {
   const [email, setEmail] = useState('');
   const [assignments, setAssignments] = useState<Record<string, string[]>>({});
   const [createdCode, setCreatedCode] = useState<string | null>(null);
+  const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editBirthDate, setEditBirthDate] = useState('');
+  const [editAssignments, setEditAssignments] = useState<Record<string, string[]>>({});
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -74,7 +79,7 @@ export default function MembersScreen() {
     const profileIds = (membershipRows ?? []).map((row) => row.profile_id);
     const [{ data: profileRows }, { data: clubRoleRows }, { data: teamMembershipRows }, invitationResult] = await Promise.all([
       profileIds.length
-        ? client.from('profiles').select('id, display_name').in('id', profileIds)
+        ? client.from('profiles').select('id, display_name, birth_date').in('id', profileIds)
         : Promise.resolve({ data: [] }),
       membershipIds.length
         ? client.from('membership_roles').select('membership_id, role').in('membership_id', membershipIds)
@@ -97,18 +102,23 @@ export default function MembersScreen() {
 
     const teamById = new Map(activeWorkspace.teams.map((team) => [team.id, team.name]));
     setMembers(
-      (membershipRows ?? []).map((membership) => ({
+      (membershipRows ?? []).map((membership) => {
+        const profile = (profileRows ?? []).find((row) => row.id === membership.profile_id);
+        return {
         id: membership.id,
-        name: (profileRows ?? []).find((profile) => profile.id === membership.profile_id)?.display_name || 'Unbenanntes Mitglied',
+        name: profile?.display_name || 'Unbenanntes Mitglied',
+        birthDate: profile?.birth_date ?? '',
         status: membership.status,
         clubRoles: (clubRoleRows ?? []).filter((row) => row.membership_id === membership.id).map((row) => row.role),
         teams: (teamMembershipRows ?? [])
           .filter((row) => row.membership_id === membership.id && teamById.has(row.team_id))
           .map((row) => ({
+            id: row.team_id,
             name: teamById.get(row.team_id)!,
             roles: ((row.team_membership_roles ?? []) as Array<{ role: string }>).map((role) => role.role),
           })),
-      })),
+        };
+      }),
     );
     setInvitations((invitationResult.data ?? []) as InvitationView[]);
     setIsLoading(false);
@@ -154,6 +164,61 @@ export default function MembersScreen() {
     setCreatedCode(data as string);
     setEmail('');
     setAssignments({});
+    await load();
+  };
+
+  const beginEdit = (member: MemberView) => {
+    setEditingMemberId(member.id);
+    setEditName(member.name);
+    setEditBirthDate(member.birthDate);
+    setEditAssignments(Object.fromEntries(member.teams.map((team) => [team.id, team.roles])));
+    setError(null);
+  };
+
+  const toggleEditRole = (teamId: string, role: string) => {
+    setEditAssignments((current) => {
+      const roles = current[teamId] ?? [];
+      return {
+        ...current,
+        [teamId]: roles.includes(role) ? roles.filter((item) => item !== role) : [...roles, role],
+      };
+    });
+  };
+
+  const saveMember = async () => {
+    if (!supabase || !editingMemberId || editName.trim().length < 2) return;
+    setIsSubmitting(true);
+    setError(null);
+    const nextAssignments = Object.entries(editAssignments)
+      .filter(([, roles]) => roles.length > 0)
+      .map(([teamId, roles]) => ({ team_id: teamId, roles }));
+    const { error: saveError } = await supabase.rpc('update_member_profile_and_roles', {
+      target_membership_id: editingMemberId,
+      new_display_name: editName.trim(),
+      new_birth_date: editBirthDate || null,
+      assignments: nextAssignments,
+    });
+    setIsSubmitting(false);
+    if (saveError) {
+      setError(saveError.message);
+      return;
+    }
+    setEditingMemberId(null);
+    await load();
+  };
+
+  const revokeInvitation = async (invitationId: string) => {
+    if (!supabase) return;
+    setIsSubmitting(true);
+    setError(null);
+    const { error: revokeError } = await supabase.rpc('revoke_member_invitation', {
+      target_invitation_id: invitationId,
+    });
+    setIsSubmitting(false);
+    if (revokeError) {
+      setError(revokeError.message);
+      return;
+    }
     await load();
   };
 
@@ -232,7 +297,13 @@ export default function MembersScreen() {
             <View key={member.id} style={styles.memberRow}>
               <View style={styles.memberMain}>
                 <Text style={styles.memberName}>{member.name}</Text>
+                {member.birthDate ? <Text style={styles.memberMeta}>Geboren am {member.birthDate}</Text> : null}
                 {member.clubRoles.length ? <Text style={styles.memberMeta}>{member.clubRoles.map((role) => roleLabels[role] ?? role).join(' · ')}</Text> : null}
+                {canManage ? (
+                  <Pressable accessibilityRole="button" onPress={() => beginEdit(member)} style={styles.editButton}>
+                    <Text style={styles.editButtonText}>Profil & Rollen bearbeiten</Text>
+                  </Pressable>
+                ) : null}
               </View>
               <View style={styles.memberTeams}>
                 {member.teams.length ? member.teams.map((team) => (
@@ -246,13 +317,72 @@ export default function MembersScreen() {
           ))}
         </View>
 
+        {canManage && editingMemberId ? (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Mitglied bearbeiten</Text>
+            <Text style={styles.label}>Anzeigename</Text>
+            <TextInput onChangeText={setEditName} placeholder="Vor- und Nachname" style={styles.input} value={editName} />
+            <Text style={styles.label}>Geburtsdatum (JJJJ-MM-TT)</Text>
+            <TextInput
+              autoCapitalize="none"
+              onChangeText={setEditBirthDate}
+              placeholder="2010-05-20"
+              style={styles.input}
+              value={editBirthDate}
+            />
+            <Text style={styles.label}>Teams und Rollen</Text>
+            {activeWorkspace?.teams.map((team) => (
+              <View key={`edit:${team.id}`} style={styles.assignmentRow}>
+                <Text style={styles.teamName}>{team.name}</Text>
+                <View style={styles.roleRow}>
+                  {['player', 'coach'].map((role) => {
+                    const selected = editAssignments[team.id]?.includes(role);
+                    return (
+                      <Pressable
+                        accessibilityRole="checkbox"
+                        accessibilityState={{ checked: Boolean(selected) }}
+                        key={role}
+                        onPress={() => toggleEditRole(team.id, role)}
+                        style={[styles.roleButton, selected && styles.roleButtonActive]}
+                      >
+                        <Text style={[styles.roleText, selected && styles.roleTextActive]}>{roleLabels[role]}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            ))}
+            {error ? <Text style={styles.error}>{error}</Text> : null}
+            <View style={styles.editActions}>
+              <Pressable accessibilityRole="button" onPress={() => setEditingMemberId(null)} style={styles.secondaryButton}>
+                <Text style={styles.secondaryText}>Abbrechen</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                disabled={editName.trim().length < 2 || isSubmitting}
+                onPress={saveMember}
+                style={[styles.primaryButton, styles.saveButton, editName.trim().length < 2 && styles.disabled]}
+              >
+                {isSubmitting ? <ActivityIndicator color={colors.surface} /> : <Text style={styles.primaryText}>Änderungen speichern</Text>}
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
+
         {canManage && invitations.length ? (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Letzte Einladungen</Text>
             {invitations.map((invitation) => (
               <View key={invitation.id} style={styles.invitationRow}>
-                <View><Text style={styles.memberName}>{invitation.email}</Text><Text style={styles.memberMeta}>{invitation.status}</Text></View>
-                <Text style={styles.smallCode}>{invitation.code}</Text>
+                <View><Text style={styles.memberName}>{invitation.email}</Text><Text style={styles.memberMeta}>{invitation.status === 'pending' ? 'Offen' : invitation.status === 'accepted' ? 'Angenommen' : invitation.status === 'revoked' ? 'Widerrufen' : 'Abgelaufen'}</Text></View>
+                <View style={styles.invitationActions}>
+                  <Text style={styles.smallCode}>{invitation.code}</Text>
+                  {invitation.status === 'pending' ? (
+                    <Pressable accessibilityRole="button" onPress={() => revokeInvitation(invitation.id)} style={styles.revokeButton}>
+                      <Text style={styles.revokeText}>Widerrufen</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
               </View>
             ))}
           </View>
@@ -292,11 +422,20 @@ const styles = StyleSheet.create({
   memberMain: { minWidth: 180 },
   memberName: { color: colors.ink, fontSize: 15, fontWeight: '800' },
   memberMeta: { color: colors.muted, fontSize: 12, marginTop: 3 },
+  editButton: { alignSelf: 'flex-start', marginTop: 8, paddingVertical: 4 },
+  editButtonText: { color: colors.blue, fontSize: 12, fontWeight: '800' },
   memberTeams: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   teamTag: { backgroundColor: colors.blueSoft, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 7 },
   teamTagTitle: { color: colors.blue, fontSize: 12, fontWeight: '900' },
   teamTagRoles: { color: colors.muted, fontSize: 11, marginTop: 2 },
   unassigned: { color: colors.faint, fontSize: 12 },
   invitationRow: { alignItems: 'center', borderTopColor: colors.border, borderTopWidth: 1, flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 12 },
+  invitationActions: { alignItems: 'flex-end', gap: 6 },
   smallCode: { color: colors.ink, fontSize: 14, fontWeight: '900', letterSpacing: 1 },
+  revokeButton: { borderColor: '#fda29b', borderRadius: 8, borderWidth: 1, paddingHorizontal: 9, paddingVertical: 5 },
+  revokeText: { color: '#b42318', fontSize: 11, fontWeight: '800' },
+  editActions: { flexDirection: 'row', gap: 10, justifyContent: 'flex-end', marginTop: 4 },
+  secondaryButton: { alignItems: 'center', borderColor: colors.border, borderRadius: 12, borderWidth: 1, marginTop: 18, minHeight: 48, padding: 14 },
+  secondaryText: { color: colors.ink, fontSize: 14, fontWeight: '800' },
+  saveButton: { minWidth: 190 },
 });
