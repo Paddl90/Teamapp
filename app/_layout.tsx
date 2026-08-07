@@ -27,6 +27,7 @@ export default function RootLayout() {
         <Stack.Screen name="events" options={{ title: 'Termine & Verfügbarkeit' }} />
         <Stack.Screen name="availability" options={{ title: 'Zeitfensterplanung' }} />
         <Stack.Screen name="squad" options={{ title: 'Saison-Kaderplanung' }} />
+        <Stack.Screen name="matchday" options={{ title: 'Spieltagsaufstellung' }} />
         <Stack.Screen name="accept-invite" options={{ title: 'Einladung annehmen' }} />
         <Stack.Screen name="dashboard" options={{ headerShown: false }} />
         </Stack>
