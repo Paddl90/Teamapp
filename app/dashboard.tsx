@@ -74,6 +74,9 @@ export default function DashboardScreen() {
             <Pressable accessibilityRole="button" onPress={() => router.push('/squad')} style={styles.quickButton}>
               <Text style={styles.quickButtonText}>Saison-Kader planen</Text>
             </Pressable>
+            <Pressable accessibilityRole="button" onPress={() => router.push('/matchday')} style={styles.quickButton}>
+              <Text style={styles.quickButtonText}>Spieltagsaufstellung</Text>
+            </Pressable>
             <Pressable accessibilityRole="button" onPress={() => router.push('/members')} style={styles.quickButton}>
               <Text style={styles.quickButtonText}>Mitglieder verwalten</Text>
             </Pressable>
