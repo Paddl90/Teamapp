@@ -122,10 +122,6 @@ begin
     from public.event_teams et
     join public.team_memberships tm on tm.team_id = et.team_id
     where et.event_id = target_event_id and tm.membership_id = target_membership_id
-  ) and not exists (
-    select 1 from public.membership_roles mr
-    where mr.membership_id = target_membership_id
-      and mr.role in ('club_admin'::public.app_role, 'cohort_admin'::public.app_role)
   ) then
     raise exception 'event is not assigned to this member';
   end if;

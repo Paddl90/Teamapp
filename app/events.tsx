@@ -25,6 +25,7 @@ type EventView = {
   maybe: number;
   no: number;
   total: number;
+  canRespond: boolean;
   myResponse: string | null;
 };
 
@@ -90,6 +91,7 @@ export default function EventsScreen() {
         maybe: responses.filter((row) => row.response === 'maybe').length,
         no: responses.filter((row) => row.response === 'no').length,
         total: participantIds.size,
+        canRespond: Boolean(membership?.id && participantIds.has(membership.id)),
         myResponse: responses.find((row) => row.membership_id === membership?.id)?.response ?? null,
       };
     }));
@@ -194,9 +196,9 @@ export default function EventsScreen() {
             <View key={event.id} style={styles.eventCard}>
               <View style={styles.eventTop}><View><Text style={styles.eventType}>{eventTypeLabels[event.eventType]}</Text><Text style={styles.eventTitle}>{event.title}</Text><Text style={styles.eventMeta}>{formatDate(event.startsAt)}{event.location ? ` · ${event.location}` : ''}</Text></View><Text style={styles.teams}>{event.teamIds.map((id) => teamNameById.get(id)).join(' + ')}</Text></View>
               <View style={styles.metrics}><Text style={styles.yes}>✓ {event.yes} dabei</Text><Text style={styles.maybe}>? {event.maybe} vielleicht</Text><Text style={styles.no}>× {event.no} nicht dabei</Text><Text style={styles.open}>○ {Math.max(0, event.total - event.yes - event.maybe - event.no)} offen</Text></View>
-              <View style={styles.responseRow}>{Object.entries(responseLabels).map(([value, label]) => (
+              {event.canRespond ? <View style={styles.responseRow}>{Object.entries(responseLabels).map(([value, label]) => (
                 <Pressable accessibilityRole="button" key={value} onPress={() => respond(event.id, value)} style={[styles.responseButton, event.myResponse === value && styles.responseActive]}><Text style={[styles.responseText, event.myResponse === value && styles.responseTextActive]}>{label}</Text></Pressable>
-              ))}</View>
+              ))}</View> : <Text style={styles.notTargeted}>Du bist diesem Termin nicht als Spieler oder Trainer zugeordnet.</Text>}
             </View>
           ))}
         </View>
@@ -212,4 +214,5 @@ const styles = StyleSheet.create({
   choiceRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 }, choice: { borderColor: colors.border, borderRadius: 999, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 8 }, choiceActive: { backgroundColor: colors.blue, borderColor: colors.blue }, choiceText: { color: colors.muted, fontSize: 12, fontWeight: '800' }, choiceTextActive: { color: colors.surface },
   primaryButton: { alignItems: 'center', backgroundColor: colors.ink, borderRadius: 12, marginTop: 18, minHeight: 48, padding: 14 }, primaryText: { color: colors.surface, fontSize: 14, fontWeight: '900' }, disabled: { opacity: 0.38 }, error: { color: '#b42318', fontSize: 13, marginTop: 12 }, loader: { marginTop: 18 }, empty: { color: colors.faint, marginTop: 18 },
   eventCard: { borderTopColor: colors.border, borderTopWidth: 1, marginTop: 16, paddingTop: 16 }, eventTop: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'space-between' }, eventType: { color: colors.blue, fontSize: 10, fontWeight: '900', letterSpacing: 1 }, eventTitle: { color: colors.ink, fontSize: 18, fontWeight: '900', marginTop: 3 }, eventMeta: { color: colors.muted, fontSize: 12, marginTop: 4 }, teams: { backgroundColor: colors.blueSoft, borderRadius: 9, color: colors.blue, fontSize: 11, fontWeight: '800', paddingHorizontal: 9, paddingVertical: 6 }, metrics: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 13 }, yes: { color: colors.green, fontSize: 12, fontWeight: '800' }, maybe: { color: colors.orange, fontSize: 12, fontWeight: '800' }, no: { color: '#b42318', fontSize: 12, fontWeight: '800' }, open: { color: colors.faint, fontSize: 12, fontWeight: '800' }, responseRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 13 }, responseButton: { borderColor: colors.border, borderRadius: 9, borderWidth: 1, paddingHorizontal: 11, paddingVertical: 8 }, responseActive: { backgroundColor: colors.ink, borderColor: colors.ink }, responseText: { color: colors.muted, fontSize: 12, fontWeight: '800' }, responseTextActive: { color: colors.surface },
+  notTargeted: { color: colors.faint, fontSize: 12, marginTop: 13 },
 });
