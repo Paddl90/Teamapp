@@ -29,7 +29,7 @@ export EXPO_PUBLIC_SUPABASE_ANON_KEY="$publishable_key"
 
 cd "$repo_dir"
 docker compose \
-  --project-name "teamapp-$environment-web" \
+  --project-name "$TEAMAPP_COMPOSE_PROJECT" \
   --env-file "$environment_file" \
   -f deploy/compose.vps.yml \
   up -d --build
