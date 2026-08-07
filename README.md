@@ -30,6 +30,7 @@ Die App startet ohne Supabase-Zugangsdaten im unverbundenen Grundzustand. Für A
 - [Produktspezifikation](./docs/PRODUCT_SPEC.md)
 - [UX-Abläufe](./docs/UX_FLOWS.md)
 - [Architektur und Datenmodell](./docs/ARCHITECTURE.md)
+- [Privater VPS-Pilot](./docs/VPS_PILOT.md)
 
 ## Projektstruktur
 

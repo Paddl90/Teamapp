@@ -1,0 +1,1 @@
+-- Intentionally empty. Pilot data is created through the application.

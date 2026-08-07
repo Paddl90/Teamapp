@@ -1,0 +1,12 @@
+services:
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.web
+      args:
+        EXPO_PUBLIC_SUPABASE_URL: ${EXPO_PUBLIC_SUPABASE_URL:?set EXPO_PUBLIC_SUPABASE_URL}
+        EXPO_PUBLIC_SUPABASE_ANON_KEY: ${EXPO_PUBLIC_SUPABASE_ANON_KEY:?set EXPO_PUBLIC_SUPABASE_ANON_KEY}
+    image: teamapp-web:pilot
+    restart: unless-stopped
+    ports:
+      - "${TEAMAPP_BIND_IP:-127.0.0.1}:8080:8080"
