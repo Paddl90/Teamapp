@@ -9,6 +9,8 @@ Die Pilotumgebung ist nur ueber das private Tailscale-Netz erreichbar. Es werden
 - Supabase Studio: `http://100.111.63.48:54323`
 - Mailpit: `http://100.111.63.48:54324`
 
+Dies ist die DEV-Stufe. Die getrennten QS- und PRD-Adressen sowie der Freigabeweg sind in [ENVIRONMENTS.md](./ENVIRONMENTS.md) dokumentiert.
+
 Diese Adressen funktionieren nur auf Geraeten, die im selben Tailscale-Netz angemeldet sind.
 
 ## Erstinstallation auf dem VPS
@@ -16,23 +18,13 @@ Diese Adressen funktionieren nur auf Geraeten, die im selben Tailscale-Netz ange
 Im Repository unter `/srv/teamapp`:
 
 ```bash
-supabase start
-supabase status -o env
-cp deploy/.env.vps.example deploy/.env.vps
-```
-
-Den von `supabase status -o env` ausgegebenen `ANON_KEY` als `EXPO_PUBLIC_SUPABASE_ANON_KEY` in `deploy/.env.vps` eintragen. Danach:
-
-```bash
-docker compose --env-file deploy/.env.vps -f deploy/compose.vps.yml up -d --build
+deploy/scripts/start-environment.sh dev
 ```
 
 ## Betrieb
 
 ```bash
-supabase status
-docker compose --env-file deploy/.env.vps -f deploy/compose.vps.yml ps
-docker compose --env-file deploy/.env.vps -f deploy/compose.vps.yml logs --tail=100
+deploy/scripts/status-environment.sh dev
 ```
 
 Die lokale Supabase-Umgebung ist ausschliesslich fuer Entwicklung und den privaten Pilotbetrieb gedacht. Vor einer Freigabe fuer weitere Vereinsmitglieder wird auf eine gehaertete, TLS-geschuetzte Self-Hosting-Konfiguration umgestellt.

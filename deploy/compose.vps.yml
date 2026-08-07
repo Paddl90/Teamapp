@@ -6,7 +6,7 @@ services:
       args:
         EXPO_PUBLIC_SUPABASE_URL: ${EXPO_PUBLIC_SUPABASE_URL:?set EXPO_PUBLIC_SUPABASE_URL}
         EXPO_PUBLIC_SUPABASE_ANON_KEY: ${EXPO_PUBLIC_SUPABASE_ANON_KEY:?set EXPO_PUBLIC_SUPABASE_ANON_KEY}
-    image: teamapp-web:pilot
+    image: ${TEAMAPP_IMAGE:-teamapp-web:dev}
     restart: unless-stopped
     ports:
-      - "${TEAMAPP_BIND_IP:-127.0.0.1}:8080:8080"
+      - "${TEAMAPP_BIND_IP:-127.0.0.1}:${TEAMAPP_WEB_PORT:-8080}:8080"

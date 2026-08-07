@@ -31,6 +31,7 @@ Die App startet ohne Supabase-Zugangsdaten im unverbundenen Grundzustand. Für A
 - [UX-Abläufe](./docs/UX_FLOWS.md)
 - [Architektur und Datenmodell](./docs/ARCHITECTURE.md)
 - [Privater VPS-Pilot](./docs/VPS_PILOT.md)
+- [Umgebungen und Git-Workflow](./docs/ENVIRONMENTS.md)
 
 ## Projektstruktur
 

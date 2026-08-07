@@ -5,6 +5,7 @@ web-build/
 .env
 .env.local
 .env.vps
+deploy/.runtime/
 *.log
 .DS_Store
 coverage/
