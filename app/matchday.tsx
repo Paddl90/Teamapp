@@ -1,4 +1,4 @@
-import { Redirect, useRouter } from 'expo-router';
+import { Redirect, useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -50,6 +50,7 @@ export default function MatchdayScreen() {
     setIsLoading(false);
   }, [activeWorkspace?.id]);
   useEffect(() => { void loadEvents(); }, [loadEvents]);
+  useFocusEffect(useCallback(() => { void loadEvents(); }, [loadEvents]));
 
   const selectedEvent = events.find((event) => event.id === selectedEventId);
   const eventTeamIds = selectedEvent?.event_teams.map((team) => team.team_id) ?? [];
