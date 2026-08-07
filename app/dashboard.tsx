@@ -1,9 +1,11 @@
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { ContextSwitcher } from '@/components/ContextSwitcher';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useWorkspace } from '@/features/workspace/WorkspaceProvider';
+import { supabase } from '@/lib/supabase';
 import { colors } from '@/theme/colors';
 
 const demoMetrics = [
@@ -12,12 +14,71 @@ const demoMetrics = [
   { label: 'Offene Antworten', value: '9', detail: 'für Dienstag' },
 ] as const;
 
+type DashboardData = {
+  playerCount: number;
+  coachCount: number;
+  openResponses: number;
+  nextEvent: null | {
+    title: string;
+    startsAt: string;
+    yes: number;
+    no: number;
+    open: number;
+    total: number;
+  };
+};
+
+const initialData: DashboardData = { playerCount: 0, coachCount: 0, openResponses: 0, nextEvent: null };
+
 export default function DashboardScreen() {
   const router = useRouter();
   const { demo } = useLocalSearchParams<{ demo?: string }>();
   const { isLoading, session, signOut } = useAuth();
   const isDemo = demo === '1';
   const { activeTeamId, activeWorkspace: workspace, error, isLoading: isWorkspaceLoading } = useWorkspace();
+  const [dashboardData, setDashboardData] = useState<DashboardData>(initialData);
+  const [dashboardError, setDashboardError] = useState<string | null>(null);
+
+  const loadDashboard = useCallback(async () => {
+    if (!supabase || !workspace || isDemo) return;
+    setDashboardError(null);
+    const selectedTeamIds = activeTeamId ? [activeTeamId] : workspace.teams.map((team) => team.id);
+    if (!selectedTeamIds.length) { setDashboardData(initialData); return; }
+
+    const [{ data: assignmentRows, error: assignmentError }, { data: eventRows, error: eventError }] = await Promise.all([
+      supabase.from('team_memberships').select('membership_id,team_id,team_membership_roles(role)').in('team_id', selectedTeamIds),
+      supabase.from('events').select('id,title,starts_at,event_teams(team_id),event_responses(membership_id,response)').eq('cohort_id', workspace.cohortId).eq('status', 'published').gte('ends_at', new Date().toISOString()).order('starts_at').limit(20),
+    ]);
+    if (assignmentError || eventError) { setDashboardError(assignmentError?.message ?? eventError?.message ?? 'Dashboard konnte nicht geladen werden.'); return; }
+
+    const players = new Set<string>();
+    const coaches = new Set<string>();
+    for (const assignment of assignmentRows ?? []) {
+      const roles = (assignment.team_membership_roles ?? []) as Array<{ role: string }>;
+      if (roles.some((role) => role.role === 'player')) players.add(assignment.membership_id);
+      if (roles.some((role) => role.role === 'coach')) coaches.add(assignment.membership_id);
+    }
+
+    const relevantEvents = (eventRows ?? []).filter((event) => (event.event_teams ?? []).some((team) => selectedTeamIds.includes(team.team_id)));
+    let openResponses = 0;
+    let nextEvent: DashboardData['nextEvent'] = null;
+    for (const [index, event] of relevantEvents.entries()) {
+      const targetTeamIds = (event.event_teams ?? []).map((team) => team.team_id).filter((id) => selectedTeamIds.includes(id));
+      const participants = new Set((assignmentRows ?? []).filter((row) => targetTeamIds.includes(row.team_id)).map((row) => row.membership_id));
+      const responses = (event.event_responses ?? []).filter((response) => participants.has(response.membership_id));
+      const eventOpen = Math.max(0, participants.size - responses.length);
+      openResponses += eventOpen;
+      if (index === 0) nextEvent = {
+        title: event.title, startsAt: event.starts_at, total: participants.size, open: eventOpen,
+        yes: responses.filter((response) => response.response === 'yes').length,
+        no: responses.filter((response) => response.response === 'no').length,
+      };
+    }
+    setDashboardData({ playerCount: players.size, coachCount: coaches.size, openResponses, nextEvent });
+  }, [activeTeamId, isDemo, workspace?.id]);
+
+  useEffect(() => { void loadDashboard(); }, [loadDashboard]);
+  const nextEventDate = dashboardData.nextEvent ? new Date(dashboardData.nextEvent.startsAt) : null;
 
   if (!isLoading && !session && !isDemo) return <Redirect href="/sign-in" />;
   if (!isDemo && session && !isWorkspaceLoading && !workspace && !error) {
@@ -31,17 +92,21 @@ export default function DashboardScreen() {
       ? `${workspace.cohortName} · ${activeTeam?.name ?? 'Gesamt'}`
       : 'Arbeitsbereich wird geladen';
   const displayName = session?.user.user_metadata?.display_name as string | undefined;
+  const isManager = Boolean(workspace?.clubRoles.some((role) => role === 'club_admin' || role === 'cohort_admin') || workspace?.teams.some((team) => team.roles.includes('coach')));
   const metrics = isDemo
     ? demoMetrics
     : [
         {
           label: 'Teams',
-          value: String(workspace?.teams.length ?? '–'),
-          detail: workspace?.teams.map((team) => team.name).join(' · ') || 'werden geladen',
+          value: String(activeTeam ? 1 : workspace?.teams.length ?? '–'),
+          detail: activeTeam?.name ?? (workspace?.teams.map((team) => team.name).join(' · ') || 'werden geladen'),
         },
-        { label: 'Spieler', value: '0', detail: 'Mitglieder als Nächstes einladen' },
-        { label: 'Offene Antworten', value: '0', detail: 'noch keine Termine' },
+        { label: 'Spieler', value: String(dashboardData.playerCount), detail: `${dashboardData.coachCount} Trainer im gewählten Bereich` },
+        { label: 'Offene Antworten', value: String(dashboardData.openResponses), detail: dashboardData.nextEvent ? 'für anstehende Termine' : 'noch keine anstehenden Termine' },
       ];
+
+  const attendanceRatio = dashboardData.nextEvent?.total ? dashboardData.nextEvent.yes / dashboardData.nextEvent.total : 0;
+  const attendanceStatus = !dashboardData.nextEvent?.total ? 'Noch offen' : attendanceRatio >= 0.7 ? 'Gut besetzt' : attendanceRatio >= 0.4 ? 'Knapp besetzt' : 'Kritisch';
 
   const leave = async () => {
     await signOut();
@@ -90,7 +155,7 @@ export default function DashboardScreen() {
               <Text style={styles.quickButtonText}>Benachrichtigungen</Text>
             </Pressable>
             <Pressable accessibilityRole="button" onPress={() => router.push('/members')} style={styles.quickButton}>
-              <Text style={styles.quickButtonText}>Mitglieder verwalten</Text>
+              <Text style={styles.quickButtonText}>{isManager ? 'Mitglieder verwalten' : 'Mitglieder & Familie'}</Text>
             </Pressable>
             <Pressable accessibilityRole="button" onPress={() => router.push('/accept-invite')} style={styles.quickButton}>
               <Text style={styles.quickButtonText}>Einladungscode eingeben</Text>
@@ -110,10 +175,10 @@ export default function DashboardScreen() {
           {workspace ? `${workspace.clubName} · Saison ${workspace.seasonName}` : 'Das Wichtigste für deinen Bereich auf einen Blick.'}
         </Text>
 
-        {error ? (
+        {error || dashboardError ? (
           <View style={styles.errorBanner}>
             <Text style={styles.errorTitle}>Arbeitsbereich konnte nicht geladen werden</Text>
-            <Text style={styles.errorText}>{error}</Text>
+            <Text style={styles.errorText}>{error ?? dashboardError}</Text>
           </View>
         ) : null}
 
@@ -127,20 +192,26 @@ export default function DashboardScreen() {
           ))}
         </View>
 
-        <View style={styles.nextCard}>
-          <View style={styles.dateBox}>
-            <Text style={styles.dateDay}>DI</Text>
-            <Text style={styles.dateNumber}>11</Text>
-          </View>
-          <View style={styles.nextContent}>
-            <Text style={styles.nextEyebrow}>NÄCHSTER TERMIN · 17:30</Text>
-            <Text style={styles.nextTitle}>Gemeinsames Training</Text>
-            <Text style={styles.nextMeta}>28 zugesagt · 4 abgesagt · 4 offen</Text>
-          </View>
-          <View style={styles.statusPill}>
-            <Text style={styles.statusText}>Gut besetzt</Text>
-          </View>
-        </View>
+        {!isDemo && !dashboardData.nextEvent ? (
+          <Pressable accessibilityRole="button" onPress={() => router.push('/events')} style={styles.emptyNextCard}>
+            <Text style={styles.emptyNextTitle}>Noch kein anstehender Termin</Text><Text style={styles.emptyNextText}>Terminübersicht öffnen</Text>
+          </Pressable>
+        ) : (
+          <Pressable accessibilityRole="button" onPress={() => !isDemo && router.push('/events')} style={styles.nextCard}>
+            <View style={styles.dateBox}>
+              <Text style={styles.dateDay}>{isDemo ? 'DI' : nextEventDate?.toLocaleDateString('de-DE', { weekday: 'short' }).replace('.', '').toUpperCase()}</Text>
+              <Text style={styles.dateNumber}>{isDemo ? '11' : nextEventDate?.getDate()}</Text>
+            </View>
+            <View style={styles.nextContent}>
+              <Text style={styles.nextEyebrow}>NÄCHSTER TERMIN · {isDemo ? '17:30' : nextEventDate?.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</Text>
+              <Text style={styles.nextTitle}>{isDemo ? 'Gemeinsames Training' : dashboardData.nextEvent?.title}</Text>
+              <Text style={styles.nextMeta}>{isDemo ? '28 zugesagt · 4 abgesagt · 4 offen' : `${dashboardData.nextEvent?.yes} zugesagt · ${dashboardData.nextEvent?.no} abgesagt · ${dashboardData.nextEvent?.open} offen`}</Text>
+            </View>
+            <View style={[styles.statusPill, attendanceStatus === 'Kritisch' && styles.statusCritical, attendanceStatus === 'Knapp besetzt' && styles.statusWarning]}>
+              <Text style={[styles.statusText, attendanceStatus === 'Kritisch' && styles.statusCriticalText, attendanceStatus === 'Knapp besetzt' && styles.statusWarningText]}>{isDemo ? 'Gut besetzt' : attendanceStatus}</Text>
+            </View>
+          </Pressable>
+        )}
       </View>
     </ScrollView>
   );
@@ -219,4 +290,8 @@ const styles = StyleSheet.create({
   nextMeta: { color: colors.inkMuted, fontSize: 13, marginTop: 5 },
   statusPill: { backgroundColor: '#dff7ea', borderRadius: 999, paddingHorizontal: 13, paddingVertical: 8 },
   statusText: { color: colors.green, fontSize: 12, fontWeight: '800' },
+  statusWarning: { backgroundColor: '#fff4e5' }, statusWarningText: { color: colors.orange },
+  statusCritical: { backgroundColor: '#fef3f2' }, statusCriticalText: { color: '#b42318' },
+  emptyNextCard: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 18, borderStyle: 'dashed', borderWidth: 1, marginTop: 16, padding: 22 },
+  emptyNextTitle: { color: colors.ink, fontSize: 17, fontWeight: '900' }, emptyNextText: { color: colors.blue, fontSize: 13, fontWeight: '800', marginTop: 5 },
 });
