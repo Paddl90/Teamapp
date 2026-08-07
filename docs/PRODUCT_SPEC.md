@@ -8,9 +8,9 @@ Plattformen: Web, iOS und Android
 
 ## 1. Produktvision
 
-Teamapp organisiert einen vollständigen Jugendjahrgang mit mehreren Mannschaften in einem gemeinsamen Arbeitsbereich. Spieler, Trainer und Eltern werden nur einmal verwaltet. Gemeinsame Trainings, getrennte Spiele, flexible Kaderzuordnungen und jahrgangsweite Auswertungen funktionieren ohne voneinander isolierte Teamkonten.
+Teamapp organisiert Vereine mit frei benannten Bereichen, Jahrgaengen und beliebig vielen Mannschaften in gemeinsamen Arbeitsbereichen. Spieler, Trainer und Eltern werden nur einmal verwaltet. Gemeinsame Trainings, getrennte Spiele, flexible Kaderzuordnungen und bereichsweite Auswertungen funktionieren ohne voneinander isolierte Teamkonten.
 
-Der erste Pilot wird für einen B-Jugend-Jahrgang mit mindestens B1 und B2 entwickelt. Das Modell muss später weitere Jahrgänge, Mannschaften und Sportarten unterstützen können.
+Der erste Pilot wird im eigenen Verein entwickelt. Das Modell unterstuetzt von Beginn an weitere Jahrgaenge, Altersklassen, Mannschaften und Sportarten.
 
 ## 2. Ziele des Piloten
 
@@ -38,15 +38,15 @@ Der erste Pilot wird für einen B-Jugend-Jahrgang mit mindestens B1 und B2 entwi
 
 ```text
 Verein
-└── Abteilung / Sportart
-    └── Saison
-        └── Jahrgang, z. B. B-Jugend
-            ├── gemeinsamer Mitgliederpool
-            ├── B1
-            └── B2
+└── Saison
+    └── frei benannter Bereich oder Jahrgang
+        ├── gemeinsamer Mitgliederpool
+        ├── Team 1
+        ├── Team 2
+        └── beliebig viele weitere Teams
 ```
 
-Ein Mitglied besitzt genau ein persönliches Profil und kann innerhalb einer Saison mehreren Mannschaften oder Gruppen zugeordnet werden. Spieler können ein Stammteam sowie weitere Einsatzberechtigungen besitzen.
+Ein Mitglied besitzt genau ein persoenliches Profil und kann vereins- und saisonuebergreifend mehreren Mannschaften oder Gruppen zugeordnet werden. Rollen gelten im passenden Kontext: Eine Person kann beispielsweise Spieler der Herren, Trainer eines Jugendteams und Spieler der Altherren sein.
 
 ## 5. Nutzerrollen
 

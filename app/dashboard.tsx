@@ -1,8 +1,9 @@
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { ContextSwitcher } from '@/components/ContextSwitcher';
 import { useAuth } from '@/features/auth/AuthProvider';
-import { useWorkspace } from '@/features/workspace/useWorkspace';
+import { useWorkspace } from '@/features/workspace/WorkspaceProvider';
 import { colors } from '@/theme/colors';
 
 const demoMetrics = [
@@ -16,19 +17,18 @@ export default function DashboardScreen() {
   const { demo } = useLocalSearchParams<{ demo?: string }>();
   const { isLoading, session, signOut } = useAuth();
   const isDemo = demo === '1';
-  const { error, isLoading: isWorkspaceLoading, workspace } = useWorkspace(
-    isDemo ? undefined : session?.user.id,
-  );
+  const { activeTeamId, activeWorkspace: workspace, error, isLoading: isWorkspaceLoading } = useWorkspace();
 
   if (!isLoading && !session && !isDemo) return <Redirect href="/sign-in" />;
   if (!isDemo && session && !isWorkspaceLoading && !workspace && !error) {
     return <Redirect href="/setup" />;
   }
 
+  const activeTeam = workspace?.teams.find((team) => team.id === activeTeamId);
   const context = isDemo
     ? 'Jugendbereich · Gesamt'
     : workspace
-      ? `${workspace.cohortName} · Gesamt`
+      ? `${workspace.cohortName} · ${activeTeam?.name ?? 'Gesamt'}`
       : 'Arbeitsbereich wird geladen';
   const displayName = session?.user.user_metadata?.display_name as string | undefined;
   const metrics = isDemo
@@ -56,6 +56,19 @@ export default function DashboardScreen() {
             <Text style={styles.leaveText}>{isDemo ? 'Pilot verlassen' : 'Abmelden'}</Text>
           </Pressable>
         </View>
+
+        {!isDemo && workspace ? <ContextSwitcher /> : null}
+
+        {!isDemo && workspace ? (
+          <View style={styles.quickActions}>
+            <Pressable accessibilityRole="button" onPress={() => router.push('/members')} style={styles.quickButton}>
+              <Text style={styles.quickButtonText}>Mitglieder verwalten</Text>
+            </Pressable>
+            <Pressable accessibilityRole="button" onPress={() => router.push('/accept-invite')} style={styles.quickButton}>
+              <Text style={styles.quickButtonText}>Einladungscode eingeben</Text>
+            </Pressable>
+          </View>
+        ) : null}
 
         {isDemo ? (
           <View style={styles.demoBanner}>
@@ -118,6 +131,9 @@ const styles = StyleSheet.create({
   context: { color: colors.ink, fontSize: 16, fontWeight: '800', marginTop: 3 },
   leaveButton: { borderColor: colors.border, borderRadius: 10, borderWidth: 1, padding: 10 },
   leaveText: { color: colors.ink, fontSize: 13, fontWeight: '700' },
+  quickActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 12 },
+  quickButton: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 10, borderWidth: 1, paddingHorizontal: 13, paddingVertical: 10 },
+  quickButtonText: { color: colors.blue, fontSize: 13, fontWeight: '800' },
   demoBanner: {
     backgroundColor: colors.blueSoft,
     borderRadius: 12,
