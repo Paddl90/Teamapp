@@ -14,6 +14,7 @@ type EventRow = {
   event_type: string;
   event_teams: Array<{ team_id: string }>;
   event_responses: Array<{ membership_id: string; response: string }>;
+  event_attendance: Array<{ membership_id: string; status: string }>;
 };
 type MatchPlanRow = {
   id: string;
@@ -40,6 +41,8 @@ type PlayerStatistic = {
   assists: number;
   yellowCards: number;
   redCards: number;
+  trainingRecorded: number;
+  trainingPresent: number;
 };
 
 const percent = (value: number, total: number) => total > 0 ? Math.round((value / total) * 100) : 0;
@@ -68,7 +71,7 @@ export default function StatisticsScreen() {
         ? supabase.from('team_memberships').select('team_id, membership_id, team_membership_roles(role)').in('team_id', teamIds)
         : Promise.resolve({ data: [], error: null }),
       supabase.from('events')
-        .select('id, event_type, event_teams(team_id), event_responses(membership_id, response)')
+        .select('id, event_type, event_teams(team_id), event_responses(membership_id, response), event_attendance(membership_id, status)')
         .eq('cohort_id', activeWorkspace.cohortId)
         .eq('season_id', activeWorkspace.seasonId)
         .neq('status', 'cancelled'),
@@ -154,6 +157,7 @@ export default function StatisticsScreen() {
         return sum + (substituted ? Math.max(0, total - substituted.minute) : 0);
       }, 0);
       const incidents = completedPlans.flatMap((plan) => plan.match_incidents);
+      const trainingAttendance = targetedEvents.filter((event)=>event.event_type==='training').flatMap((event)=>event.event_attendance.filter((entry)=>entry.membership_id===membershipId));
       return {
         membershipId,
         name: names.get(membershipId) ?? 'Unbekannt',
@@ -171,13 +175,16 @@ export default function StatisticsScreen() {
         assists: incidents.filter((incident) => incident.incident_type === 'goal' && incident.related_membership_id === membershipId).length,
         yellowCards: incidents.filter((incident) => incident.incident_type === 'yellow_card' && incident.membership_id === membershipId).length,
         redCards: incidents.filter((incident) => incident.incident_type === 'red_card' && incident.membership_id === membershipId).length,
+        trainingRecorded: trainingAttendance.length,
+        trainingPresent: trainingAttendance.filter((entry)=>entry.status==='present').length,
       };
     }).sort((a, b) => b.yes - a.yes || a.name.localeCompare(b.name, 'de'));
 
     const possibleResponses = players.reduce((sum, player) => sum + player.events, 0);
     const yes = players.reduce((sum, player) => sum + player.yes, 0);
     const responded = players.reduce((sum, player) => sum + player.yes + player.no + player.maybe, 0);
-    return { players, visibleEvents, visiblePlans, possibleResponses, yes, responded };
+    const trainingRecorded=players.reduce((sum,player)=>sum+player.trainingRecorded,0);const trainingPresent=players.reduce((sum,player)=>sum+player.trainingPresent,0);
+    return { players, visibleEvents, visiblePlans, possibleResponses, yes, responded,trainingRecorded,trainingPresent };
   }, [activeWorkspace, assignments, events, matchPlans, names, selectedTeamIds, viewerMembershipId]);
 
   if (!session) return <Redirect href="/sign-in" />;
@@ -211,6 +218,7 @@ export default function StatisticsScreen() {
               <View style={styles.metric}><Text style={styles.metricLabel}>Termine</Text><Text style={styles.metricValue}>{statistics.visibleEvents.length}</Text><Text style={styles.metricDetail}>in dieser Saison</Text></View>
               <View style={styles.metric}><Text style={styles.metricLabel}>Zusagen</Text><Text style={styles.metricValue}>{percent(statistics.yes, statistics.possibleResponses)} %</Text><Text style={styles.metricDetail}>{statistics.yes} von {statistics.possibleResponses}</Text></View>
               <View style={styles.metric}><Text style={styles.metricLabel}>Rücklauf</Text><Text style={styles.metricValue}>{percent(statistics.responded, statistics.possibleResponses)} %</Text><Text style={styles.metricDetail}>beantwortete Teilnahmen</Text></View>
+              <View style={styles.metric}><Text style={styles.metricLabel}>Trainingsanwesenheit</Text><Text style={styles.metricValue}>{percent(statistics.trainingPresent,statistics.trainingRecorded)} %</Text><Text style={styles.metricDetail}>{statistics.trainingPresent} von {statistics.trainingRecorded} erfasst</Text></View>
               <View style={styles.metric}><Text style={styles.metricLabel}>Aufstellungen</Text><Text style={styles.metricValue}>{statistics.visiblePlans.length}</Text><Text style={styles.metricDetail}>veröffentlicht</Text></View>
             </View>
 
@@ -228,6 +236,7 @@ export default function StatisticsScreen() {
                   <View style={styles.playerMetric}><Text style={[styles.playerValue, styles.positive]}>{player.yes}</Text><Text style={styles.playerLabel}>Dabei</Text></View>
                   <View style={styles.playerMetric}><Text style={styles.playerValue}>{player.no}</Text><Text style={styles.playerLabel}>Absage</Text></View>
                   <View style={styles.playerMetric}><Text style={styles.playerValue}>{player.open}</Text><Text style={styles.playerLabel}>Offen</Text></View>
+                  <View style={styles.playerMetric}><Text style={[styles.playerValue,styles.positive]}>{percent(player.trainingPresent,player.trainingRecorded)} %</Text><Text style={styles.playerLabel}>Training</Text></View>
                   <View style={styles.playerMetric}><Text style={styles.playerValue}>{player.starts}</Text><Text style={styles.playerLabel}>Startelf</Text></View>
                   <View style={styles.playerMetric}><Text style={styles.playerValue}>{player.appearances}</Text><Text style={styles.playerLabel}>Einsätze</Text></View>
                   <View style={styles.playerMetric}><Text style={styles.playerValue}>{player.minutes}</Text><Text style={styles.playerLabel}>Minuten</Text></View>
