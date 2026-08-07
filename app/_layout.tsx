@@ -28,6 +28,7 @@ export default function RootLayout() {
         <Stack.Screen name="availability" options={{ title: 'Zeitfensterplanung' }} />
         <Stack.Screen name="squad" options={{ title: 'Saison-Kaderplanung' }} />
         <Stack.Screen name="matchday" options={{ title: 'Spieltagsaufstellung' }} />
+        <Stack.Screen name="match-report" options={{ title: 'Spielbericht' }} />
         <Stack.Screen name="funds" options={{ title: 'Mannschaftskasse' }} />
         <Stack.Screen name="statistics" options={{ title: 'Statistik' }} />
         <Stack.Screen name="training" options={{ title: 'Individuelles Training' }} />

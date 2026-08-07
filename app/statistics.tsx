@@ -20,6 +20,8 @@ type MatchPlanRow = {
   team_id: string;
   status: string;
   match_squad_entries: Array<{ membership_id: string; squad_role: string }>;
+  match_results: Array<{ match_minutes: number; status: string }> | { match_minutes: number; status: string } | null;
+  match_incidents: Array<{ incident_type: string; minute: number; membership_id: string; related_membership_id: string | null }>;
 };
 type PlayerStatistic = {
   membershipId: string;
@@ -32,9 +34,16 @@ type PlayerStatistic = {
   open: number;
   starts: number;
   bench: number;
+  appearances: number;
+  minutes: number;
+  goals: number;
+  assists: number;
+  yellowCards: number;
+  redCards: number;
 };
 
 const percent = (value: number, total: number) => total > 0 ? Math.round((value / total) * 100) : 0;
+const resultFor = (plan: MatchPlanRow) => Array.isArray(plan.match_results) ? plan.match_results[0] : plan.match_results;
 
 export default function StatisticsScreen() {
   const { session } = useAuth();
@@ -64,7 +73,7 @@ export default function StatisticsScreen() {
         .eq('season_id', activeWorkspace.seasonId)
         .neq('status', 'cancelled'),
       teamIds.length
-        ? supabase.from('match_plans').select('id, team_id, status, match_squad_entries(membership_id, squad_role)').in('team_id', teamIds)
+        ? supabase.from('match_plans').select('id, team_id, status, match_squad_entries(membership_id, squad_role), match_results(match_minutes, status), match_incidents(incident_type, minute, membership_id, related_membership_id)').in('team_id', teamIds)
         : Promise.resolve({ data: [], error: null }),
     ]);
 
@@ -101,7 +110,7 @@ export default function StatisticsScreen() {
     setNames(new Map((membershipResult.data ?? []).map((row) => [row.id, profileById.get(row.profile_id) ?? 'Unbekannt'])));
     setAssignments(playerAssignments);
     setEvents((eventResult.data ?? []) as EventRow[]);
-    setMatchPlans((matchResult.data ?? []) as MatchPlanRow[]);
+    setMatchPlans((matchResult.data ?? []) as unknown as MatchPlanRow[]);
     setIsLoading(false);
   }, [activeWorkspace?.id, session?.user.id]);
 
@@ -129,6 +138,22 @@ export default function StatisticsScreen() {
       const targetedEvents = visibleEvents.filter((event) => event.event_teams.some((team) => teamIds.includes(team.team_id)));
       const responses = targetedEvents.map((event) => event.event_responses.find((response) => response.membership_id === membershipId)?.response ?? 'open');
       const squadEntries = visiblePlans.flatMap((plan) => plan.match_squad_entries.filter((entry) => entry.membership_id === membershipId));
+      const completedPlans = visiblePlans.filter((plan) => resultFor(plan)?.status === 'completed');
+      const appearances = completedPlans.filter((plan) => {
+        const squad = plan.match_squad_entries.find((entry) => entry.membership_id === membershipId);
+        return squad?.squad_role === 'starting' || plan.match_incidents.some((incident) => incident.incident_type === 'substitution' && incident.related_membership_id === membershipId);
+      }).length;
+      const minutes = completedPlans.reduce((sum, plan) => {
+        const squad = plan.match_squad_entries.find((entry) => entry.membership_id === membershipId);
+        const total = resultFor(plan)?.match_minutes ?? 0;
+        if (squad?.squad_role === 'starting') {
+          const substituted = plan.match_incidents.find((incident) => incident.incident_type === 'substitution' && incident.membership_id === membershipId);
+          return sum + Math.min(total, substituted?.minute ?? total);
+        }
+        const substituted = plan.match_incidents.find((incident) => incident.incident_type === 'substitution' && incident.related_membership_id === membershipId);
+        return sum + (substituted ? Math.max(0, total - substituted.minute) : 0);
+      }, 0);
+      const incidents = completedPlans.flatMap((plan) => plan.match_incidents);
       return {
         membershipId,
         name: names.get(membershipId) ?? 'Unbekannt',
@@ -140,6 +165,12 @@ export default function StatisticsScreen() {
         open: responses.filter((response) => response === 'open').length,
         starts: squadEntries.filter((entry) => entry.squad_role === 'starting').length,
         bench: squadEntries.filter((entry) => entry.squad_role === 'bench').length,
+        appearances,
+        minutes,
+        goals: incidents.filter((incident) => incident.incident_type === 'goal' && incident.membership_id === membershipId).length,
+        assists: incidents.filter((incident) => incident.incident_type === 'goal' && incident.related_membership_id === membershipId).length,
+        yellowCards: incidents.filter((incident) => incident.incident_type === 'yellow_card' && incident.membership_id === membershipId).length,
+        redCards: incidents.filter((incident) => incident.incident_type === 'red_card' && incident.membership_id === membershipId).length,
       };
     }).sort((a, b) => b.yes - a.yes || a.name.localeCompare(b.name, 'de'));
 
@@ -198,7 +229,11 @@ export default function StatisticsScreen() {
                   <View style={styles.playerMetric}><Text style={styles.playerValue}>{player.no}</Text><Text style={styles.playerLabel}>Absage</Text></View>
                   <View style={styles.playerMetric}><Text style={styles.playerValue}>{player.open}</Text><Text style={styles.playerLabel}>Offen</Text></View>
                   <View style={styles.playerMetric}><Text style={styles.playerValue}>{player.starts}</Text><Text style={styles.playerLabel}>Startelf</Text></View>
-                  <View style={styles.playerMetric}><Text style={styles.playerValue}>{player.bench}</Text><Text style={styles.playerLabel}>Bank</Text></View>
+                  <View style={styles.playerMetric}><Text style={styles.playerValue}>{player.appearances}</Text><Text style={styles.playerLabel}>Einsätze</Text></View>
+                  <View style={styles.playerMetric}><Text style={styles.playerValue}>{player.minutes}</Text><Text style={styles.playerLabel}>Minuten</Text></View>
+                  <View style={styles.playerMetric}><Text style={styles.playerValue}>{player.goals}</Text><Text style={styles.playerLabel}>Tore</Text></View>
+                  <View style={styles.playerMetric}><Text style={styles.playerValue}>{player.assists}</Text><Text style={styles.playerLabel}>Vorlagen</Text></View>
+                  <View style={styles.playerMetric}><Text style={styles.playerValue}>{player.yellowCards}/{player.redCards}</Text><Text style={styles.playerLabel}>Gelb/Rot</Text></View>
                 </View>
               ))}
             </View>
