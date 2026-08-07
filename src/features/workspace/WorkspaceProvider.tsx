@@ -39,7 +39,9 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   const [contexts, setContexts] = useState<WorkspaceContext[]>([]);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
   const [activeTeamId, setActiveTeamId] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(Boolean(session));
+  // Keep protected routes mounted until the initial session-driven workspace
+  // lookup has completed. This also preserves direct web links on first load.
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = async () => {
