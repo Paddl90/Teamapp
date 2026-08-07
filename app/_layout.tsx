@@ -19,6 +19,8 @@ export default function RootLayout() {
       >
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="sign-in" options={{ title: 'Anmelden', presentation: 'modal' }} />
+        <Stack.Screen name="register" options={{ title: 'Konto erstellen', presentation: 'modal' }} />
+        <Stack.Screen name="setup" options={{ title: 'Arbeitsbereich einrichten' }} />
         <Stack.Screen name="dashboard" options={{ headerShown: false }} />
       </Stack>
     </AuthProvider>

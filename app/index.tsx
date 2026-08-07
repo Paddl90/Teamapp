@@ -6,9 +6,9 @@ import { colors } from '@/theme/colors';
 
 const features = [
   {
-    eyebrow: 'JAHRGANG',
-    title: 'B1 und B2 gemeinsam führen',
-    description: 'Ein Spielerpool, gemeinsame Trainings und flexible Kader.',
+    eyebrow: 'BEREICHE & TEAMS',
+    title: 'Beliebig viele Teams gemeinsam führen',
+    description: 'Ein gemeinsamer Mitgliederpool, ohne starre Altersklassen oder Teamgrenzen.',
     accent: colors.blue,
   },
   {
@@ -32,13 +32,13 @@ export default function HomeScreen() {
     <ScrollView contentContainerStyle={styles.page}>
       <View style={styles.shell}>
         <View style={styles.badge}>
-          <Text style={styles.badgeText}>VEREINSPILOT · B-JUGEND</Text>
+          <Text style={styles.badgeText}>VEREINSORGANISATION · ALLE STUFEN</Text>
         </View>
 
-        <Text style={styles.title}>Ein Jahrgang.{`\n`}Ein gemeinsamer Plan.</Text>
+        <Text style={styles.title}>Ein Verein.{`\n`}Ein gemeinsamer Plan.</Text>
         <Text style={styles.subtitle}>
-          Teamapp verbindet B1 und B2, ohne Spieler, Termine und Trainer in getrennte
-          Bereiche aufzuteilen.
+          Teamapp verbindet Bereiche, Jahrgänge und beliebig viele Teams, ohne Mitglieder,
+          Termine und Trainer in getrennte Arbeitsbereiche aufzuteilen.
         </Text>
 
         <View style={styles.actions}>
@@ -61,17 +61,17 @@ export default function HomeScreen() {
         <View style={styles.contextCard}>
           <View>
             <Text style={styles.contextLabel}>AKTIVER KONTEXT</Text>
-            <Text style={styles.contextTitle}>B-Jugend · Saison 2026/27</Text>
+            <Text style={styles.contextTitle}>U17 · Saison 2026/27</Text>
           </View>
           <View style={styles.teamRow}>
             <View style={[styles.teamPill, styles.teamPillActive]}>
               <Text style={styles.teamPillActiveText}>Gesamt</Text>
             </View>
             <View style={styles.teamPill}>
-              <Text style={styles.teamPillText}>B1</Text>
+              <Text style={styles.teamPillText}>Team 1</Text>
             </View>
             <View style={styles.teamPill}>
-              <Text style={styles.teamPillText}>B2</Text>
+              <Text style={styles.teamPillText}>Team 2</Text>
             </View>
           </View>
         </View>

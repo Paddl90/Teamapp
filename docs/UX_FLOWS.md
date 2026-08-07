@@ -9,7 +9,7 @@ Grundlage: [Produktspezifikation](./PRODUCT_SPEC.md)
 Der aktive Kontext ist jederzeit sichtbar und umschaltbar:
 
 ```text
-Verein → Saison → B-Jugend → gesamter Jahrgang | B1 | B2
+Verein → Saison → Bereich/Jahrgang → Gesamt | frei gewaehlte Teams
 ```
 
 Ein Kontextwechsel filtert Kalender, Mitglieder, Statistiken und Kasse, ohne einen getrennten Team-Arbeitsbereich zu öffnen. Jahrgangsweite Inhalte bleiben als solche gekennzeichnet.
@@ -85,8 +85,8 @@ Unter „Mehr“ liegen Spieltag, Training, Statistik, Kasse, Mitglieder und Ein
 
 ```text
 Verein/Saison wählen
-→ Jahrgang anlegen
-→ B1 und B2 anlegen
+→ Bereich oder Jahrgang frei benennen
+→ beliebig viele Teams anlegen
 → Mitglieder importieren oder einladen
 → Rollen und Positionen vergeben
 → Stammteam und Einsatzberechtigungen festlegen
@@ -101,7 +101,7 @@ Der Einrichtungsassistent zeigt Fortschritt, fehlende Pflichtangaben und möglic
 Kalender öffnen
 → Zeitfenster wählen
 → Terminart festlegen
-→ Zielgruppe wählen: Jahrgang, B1, B2, Gruppe oder Personen
+→ Zielgruppe wählen: Bereich/Jahrgang, ausgewaehlte Teams, Gruppe oder Personen
 → Ort, Frist und Mindestbesetzung festlegen
 → Vorschau der Empfänger und Konflikte prüfen
 → als Entwurf speichern oder veröffentlichen
@@ -129,7 +129,7 @@ Jede Zelle zeigt Spieler, Torhüter und Trainer als Zahl sowie eine Ampelfarbe. 
 Saison und Jahrgang wählen
 → Planungsvariante erstellen oder kopieren
 → Soll-Kadergrößen und Positionsbedarf festlegen
-→ Spieler zwischen Pool, B1 und B2 verschieben
+→ Spieler zwischen Pool und den frei angelegten Teams verschieben
 → Warnungen und Positionsabdeckung prüfen
 → Variante speichern und kommentieren
 → Variante bestätigen
@@ -212,7 +212,7 @@ Korrekturen erfolgen über nachvollziehbare Gegen- oder Korrekturbuchungen; bere
 | Kalender | Kalender | Monat, Woche, Liste und Kontextfilter |
 | Planung | Kapazitätsraster | Verfügbarkeit je Zeitfenster |
 | Termine | Termindetail | Angaben, Antworten, Gruppen und Konflikte |
-| Kader | Saisonplanung | Pool, B1, B2 und Positionsabdeckung |
+| Kader | Saisonplanung | Pool, frei angelegte Teams und Positionsabdeckung |
 | Spieltag | Nominierung | Verfügbarkeit und Spielberechtigung |
 | Spieltag | Aufstellung | Spielfeld, Startelf und Bank |
 | Spieltag | Ereignisse | Tore, Wechsel, Karten und Minuten |
