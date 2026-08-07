@@ -15,7 +15,7 @@ type PlayerView = { membershipId: string; name: string; teamIds: string[]; prima
 type TargetRow = { team_id: string; position_code: string; target_count: number };
 
 export default function SquadScreen() {
-  const { session } = useAuth();
+  const { isLoading: isAuthLoading, session } = useAuth();
   const { activeTeamId, activeWorkspace, isLoading: isWorkspaceLoading } = useWorkspace();
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(activeTeamId);
   const [players, setPlayers] = useState<PlayerView[]>([]);
@@ -83,6 +83,7 @@ export default function SquadScreen() {
     if (targetError) setError(targetError.message); else await load();
   };
 
+  if (isAuthLoading) return null;
   if (!session) return <Redirect href="/sign-in" />;
   if (!isWorkspaceLoading && !activeWorkspace) return <Redirect href="/setup" />;
 

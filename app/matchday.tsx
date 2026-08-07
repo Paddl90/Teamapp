@@ -20,7 +20,7 @@ const formatDate = (value: string) => new Intl.DateTimeFormat('de-DE', { dateSty
 
 export default function MatchdayScreen() {
   const router = useRouter();
-  const { session } = useAuth();
+  const { isLoading: isAuthLoading, session } = useAuth();
   const { activeWorkspace, isLoading: isWorkspaceLoading } = useWorkspace();
   const [events, setEvents] = useState<MatchEvent[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
@@ -98,6 +98,7 @@ export default function MatchdayScreen() {
     setIsSubmitting(false);
   };
 
+  if (isAuthLoading) return null;
   if (!session) return <Redirect href="/sign-in" />;
   if (!isWorkspaceLoading && !activeWorkspace) return <Redirect href="/setup" />;
   return <ScrollView contentContainerStyle={styles.page}><View style={styles.shell}>

@@ -21,7 +21,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 const inSevenDays = () => { const date = new Date(); date.setDate(date.getDate() + 7); return date.toISOString().slice(0, 10); };
 
 export default function TrainingScreen() {
-  const { session } = useAuth();
+  const { isLoading: isAuthLoading, session } = useAuth();
   const { activeWorkspace, isLoading: isWorkspaceLoading } = useWorkspace();
   const [teamId, setTeamId] = useState<string | null>(null);
   const [myMembershipId, setMyMembershipId] = useState<string | null>(null);
@@ -102,6 +102,7 @@ export default function TrainingScreen() {
     if (statusError) setError(statusError.message); else await load();
   };
 
+  if (isAuthLoading) return null;
   if (!session) return <Redirect href="/sign-in" />;
   if (!isWorkspaceLoading && !activeWorkspace) return <Redirect href="/setup" />;
 

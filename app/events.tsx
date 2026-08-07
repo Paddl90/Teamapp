@@ -45,7 +45,7 @@ const formatDate = (value: string) => new Intl.DateTimeFormat('de-DE', {
 }).format(new Date(value));
 
 export default function EventsScreen() {
-  const { session } = useAuth();
+  const { isLoading: isAuthLoading, session } = useAuth();
   const { activeWorkspace, isLoading: isWorkspaceLoading } = useWorkspace();
   const [events, setEvents] = useState<EventView[]>([]);
   const [title, setTitle] = useState('');
@@ -230,6 +230,7 @@ export default function EventsScreen() {
     setIsSubmitting(false); if(attendanceError)setError(attendanceError.message);else await load();
   };
 
+  if (isAuthLoading) return null;
   if (!session) return <Redirect href="/sign-in" />;
   if (!isWorkspaceLoading && !activeWorkspace) return <Redirect href="/setup" />;
 

@@ -14,7 +14,7 @@ type Player = { id:string; name:string; role:string };
 type Incident = { id:string;incident_type:string;minute:number;membership_id:string;related_membership_id:string|null;note:string|null };
 
 export default function MatchReportScreen(){
- const {session}=useAuth(); const {activeWorkspace,isLoading:isWorkspaceLoading}=useWorkspace();
+ const {isLoading:isAuthLoading,session}=useAuth(); const {activeWorkspace,isLoading:isWorkspaceLoading}=useWorkspace();
  const [plans,setPlans]=useState<Plan[]>([]); const [planId,setPlanId]=useState<string|null>(null); const [players,setPlayers]=useState<Player[]>([]); const [incidents,setIncidents]=useState<Incident[]>([]);
  const [goalsFor,setGoalsFor]=useState('0'); const [goalsAgainst,setGoalsAgainst]=useState('0'); const [matchMinutes,setMatchMinutes]=useState('90'); const [resultStatus,setResultStatus]=useState('completed');
  const [incidentType,setIncidentType]=useState('goal'); const [minute,setMinute]=useState('1'); const [playerId,setPlayerId]=useState<string|null>(null); const [relatedPlayerId,setRelatedPlayerId]=useState<string|null>(null); const [note,setNote]=useState('');
@@ -38,7 +38,7 @@ export default function MatchReportScreen(){
  const addIncident=async()=>{if(!supabase||!planId||!playerId)return;setIsSubmitting(true);setError(null);setSuccess(null);const {error:e}=await supabase.rpc('add_match_incident',{target_match_plan_id:planId,target_incident_type:incidentType,target_minute:Number(minute),target_membership_id:playerId,target_related_membership_id:relatedPlayerId,incident_note:note});if(e)setError(e.message);else{setNote('');setRelatedPlayerId(null);await loadReport()}setIsSubmitting(false)};
  const removeIncident=async(id:string)=>{if(!supabase)return;const {error:e}=await supabase.rpc('delete_match_incident',{target_incident_id:id});if(e)setError(e.message);else await loadReport()};
  const name=(id:string)=>players.find(p=>p.id===id)?.name??'Unbekannt';
- if(!session)return <Redirect href="/sign-in"/>;if(!isWorkspaceLoading&&!activeWorkspace)return <Redirect href="/setup"/>;
+ if(isAuthLoading)return null;if(!session)return <Redirect href="/sign-in"/>;if(!isWorkspaceLoading&&!activeWorkspace)return <Redirect href="/setup"/>;
  return <ScrollView contentContainerStyle={s.page}><View style={s.shell}><Text style={s.eyebrow}>SPIELBERICHT</Text><Text style={s.title}>Ergebnis & Ereignisse</Text><Text style={s.subtitle}>Endstand, Torschützen, Vorlagen, Karten und Wechsel bilden die Grundlage für die Saisonstatistik.</Text><ContextSwitcher/>
  {isLoading?<ActivityIndicator color={colors.blue} style={s.loader}/>:null}{plans.length===0&&!isLoading?<View style={s.card}><Text style={s.cardTitle}>Keine veröffentlichte Aufstellung</Text></View>:null}
  <View style={s.choices}>{plans.map(p=><Pressable accessibilityRole="button" key={p.id} onPress={()=>setPlanId(p.id)} style={[s.choice,planId===p.id&&s.active]}><Text style={[s.choiceText,planId===p.id&&s.activeText]}>{p.event.title} · {p.opponent}</Text></Pressable>)}</View>

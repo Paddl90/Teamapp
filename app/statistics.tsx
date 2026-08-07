@@ -49,7 +49,7 @@ const percent = (value: number, total: number) => total > 0 ? Math.round((value 
 const resultFor = (plan: MatchPlanRow) => Array.isArray(plan.match_results) ? plan.match_results[0] : plan.match_results;
 
 export default function StatisticsScreen() {
-  const { session } = useAuth();
+  const { isLoading: isAuthLoading, session } = useAuth();
   const { activeWorkspace, isLoading: isWorkspaceLoading } = useWorkspace();
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [assignments, setAssignments] = useState<TeamAssignment[]>([]);
@@ -187,6 +187,7 @@ export default function StatisticsScreen() {
     return { players, visibleEvents, visiblePlans, possibleResponses, yes, responded,trainingRecorded,trainingPresent };
   }, [activeWorkspace, assignments, events, matchPlans, names, selectedTeamIds, viewerMembershipId]);
 
+  if (isAuthLoading) return null;
   if (!session) return <Redirect href="/sign-in" />;
   if (!isWorkspaceLoading && !activeWorkspace) return <Redirect href="/setup" />;
 

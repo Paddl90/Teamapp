@@ -13,7 +13,7 @@ type Entry={id:string;entry_type:string;amount_cents:number;description:string;b
 const euro=(c:number)=>new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR'}).format(c/100);
 
 export default function FundsScreen(){
- const {session}=useAuth(); const {activeWorkspace,isLoading}=useWorkspace(); const [teamId,setTeamId]=useState<string|null>(null);
+ const {isLoading:isAuthLoading,session}=useAuth(); const {activeWorkspace,isLoading}=useWorkspace(); const [teamId,setTeamId]=useState<string|null>(null);
  const [catalog,setCatalog]=useState<Catalog[]>([]); const [players,setPlayers]=useState<Player[]>([]); const [penalties,setPenalties]=useState<Penalty[]>([]); const [entries,setEntries]=useState<Entry[]>([]);
  const [ruleTitle,setRuleTitle]=useState(''); const [ruleAmount,setRuleAmount]=useState('5,00'); const [selectedPlayer,setSelectedPlayer]=useState<string|null>(null); const [selectedRule,setSelectedRule]=useState<string|null>(null); const [note,setNote]=useState('');
  const [entryType,setEntryType]=useState('income'); const [entryAmount,setEntryAmount]=useState(''); const [description,setDescription]=useState(''); const [error,setError]=useState<string|null>(null);
@@ -29,7 +29,7 @@ export default function FundsScreen(){
  const assign=async()=>{if(!supabase||!teamId||!selectedPlayer||!selectedRule)return;const {error:e}=await supabase.rpc('assign_member_penalty',{target_team_id:teamId,target_membership_id:selectedPlayer,target_catalog_id:selectedRule,penalty_note:note});if(e)setError(e.message);else{setNote('');await load()}};
  const settle=async(id:string,status:string)=>{if(!supabase)return;const {error:e}=await supabase.rpc('settle_member_penalty',{target_penalty_id:id,new_status:status});if(e)setError(e.message);else await load()};
  const book=async()=>{if(!supabase||!teamId)return;const {error:e}=await supabase.rpc('book_team_cash_entry',{target_team_id:teamId,target_entry_type:entryType,target_amount_cents:cents(entryAmount),target_description:description});if(e)setError(e.message);else{setEntryAmount('');setDescription('');await load()}};
- if(!session)return <Redirect href="/sign-in"/>; if(!isLoading&&!activeWorkspace)return <Redirect href="/setup"/>;
+ if(isAuthLoading)return null; if(!session)return <Redirect href="/sign-in"/>; if(!isLoading&&!activeWorkspace)return <Redirect href="/setup"/>;
  const balance=entries.reduce((s,e)=>s+e.amount_cents,0),open=penalties.filter(p=>p.status==='open').reduce((s,p)=>s+p.amount_cents,0);
  return <ScrollView contentContainerStyle={s.page}><View style={s.shell}><Text style={s.eyebrow}>MANNSCHAFTSKASSE</Text><Text style={s.title}>Kasse & Strafenkatalog</Text><Text style={s.subtitle}>Regeln, offene Strafen, Zahlungen und sonstige Buchungen nachvollziehbar je Mannschaft.</Text><ContextSwitcher/><View style={s.tabs}>{activeWorkspace?.teams.map(t=><Pressable accessibilityRole="button" key={t.id} onPress={()=>setTeamId(t.id)} style={[s.tab,teamId===t.id&&s.active]}><Text style={[s.tabText,teamId===t.id&&s.activeText]}>{t.name}</Text></Pressable>)}</View>
  <View style={s.metrics}><View style={s.metric}><Text style={s.muted}>Kassenstand</Text><Text style={s.value}>{euro(balance)}</Text></View><View style={s.metric}><Text style={s.muted}>Offene Strafen</Text><Text style={s.value}>{euro(open)}</Text></View></View>
