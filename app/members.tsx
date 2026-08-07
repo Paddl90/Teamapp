@@ -36,12 +36,16 @@ type MemberView = {
 };
 
 type InvitationView = { id: string; email: string; code: string; status: string };
+type GuardianLink = { id: string; guardian_membership_id: string; child_membership_id: string };
 
 export default function MembersScreen() {
   const { session } = useAuth();
   const { activeWorkspace, isLoading: isWorkspaceLoading } = useWorkspace();
   const [members, setMembers] = useState<MemberView[]>([]);
   const [invitations, setInvitations] = useState<InvitationView[]>([]);
+  const [guardianLinks, setGuardianLinks] = useState<GuardianLink[]>([]);
+  const [guardianId, setGuardianId] = useState('');
+  const [childId, setChildId] = useState('');
   const [email, setEmail] = useState('');
   const [assignments, setAssignments] = useState<Record<string, string[]>>({});
   const [createdCode, setCreatedCode] = useState<string | null>(null);
@@ -77,7 +81,7 @@ export default function MembersScreen() {
 
     const membershipIds = (membershipRows ?? []).map((row) => row.id);
     const profileIds = (membershipRows ?? []).map((row) => row.profile_id);
-    const [{ data: profileRows }, { data: clubRoleRows }, { data: teamMembershipRows }, invitationResult] = await Promise.all([
+    const [{ data: profileRows }, { data: clubRoleRows }, { data: teamMembershipRows }, invitationResult, guardianResult] = await Promise.all([
       profileIds.length
         ? client.from('profiles').select('id, display_name, birth_date').in('id', profileIds)
         : Promise.resolve({ data: [] }),
@@ -98,6 +102,7 @@ export default function MembersScreen() {
             .order('created_at', { ascending: false })
             .limit(20)
         : Promise.resolve({ data: [] }),
+      client.from('guardian_child_links').select('id, guardian_membership_id, child_membership_id').eq('club_id', activeWorkspace.clubId),
     ]);
 
     const teamById = new Map(activeWorkspace.teams.map((team) => [team.id, team.name]));
@@ -121,6 +126,7 @@ export default function MembersScreen() {
       }),
     );
     setInvitations((invitationResult.data ?? []) as InvitationView[]);
+    setGuardianLinks((guardianResult.data ?? []) as GuardianLink[]);
     setIsLoading(false);
   }, [activeWorkspace?.id, canManage]);
 
@@ -222,6 +228,19 @@ export default function MembersScreen() {
     await load();
   };
 
+  const saveGuardianLink = async (targetGuardianId: string, targetChildId: string, shouldLink: boolean) => {
+    if (!supabase || !targetGuardianId || !targetChildId) return;
+    setIsSubmitting(true); setError(null);
+    const { error: linkError } = await supabase.rpc('set_guardian_child_link', {
+      target_guardian_membership_id: targetGuardianId,
+      target_child_membership_id: targetChildId,
+      should_link: shouldLink,
+    });
+    setIsSubmitting(false);
+    if (linkError) { setError(linkError.message); return; }
+    setGuardianId(''); setChildId(''); await load();
+  };
+
   if (!session) return <Redirect href="/sign-in" />;
   if (!isWorkspaceLoading && !activeWorkspace) return <Redirect href="/setup" />;
 
@@ -252,7 +271,7 @@ export default function MembersScreen() {
               <View key={team.id} style={styles.assignmentRow}>
                 <Text style={styles.teamName}>{team.name}</Text>
                 <View style={styles.roleRow}>
-                  {['player', 'coach'].map((role) => {
+                  {['player', 'coach', 'guardian'].map((role) => {
                     const selected = assignments[team.id]?.includes(role);
                     return (
                       <Pressable
@@ -290,6 +309,19 @@ export default function MembersScreen() {
           </View>
         ) : null}
 
+        {!canManage && guardianLinks.length ? (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Meine betreuten Spieler</Text>
+            <Text style={styles.helper}>Für diese Kinder kannst du Termin-Rückmeldungen und Trainingsvorgaben verwalten.</Text>
+            {guardianLinks.map((link) => (
+              <View key={`mine:${link.id}`} style={styles.memberRow}>
+                <Text style={styles.memberName}>{members.find((member) => member.id === link.child_membership_id)?.name ?? 'Spieler'}</Text>
+                <Text style={styles.memberMeta}>{members.find((member) => member.id === link.child_membership_id)?.teams.map((team) => team.name).join(' · ')}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Aktive Mitglieder</Text>
           {isLoading ? <ActivityIndicator color={colors.blue} style={styles.loader} /> : null}
@@ -317,6 +349,34 @@ export default function MembersScreen() {
           ))}
         </View>
 
+        {canManage ? (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Eltern & Kinder verknüpfen</Text>
+            <Text style={styles.helper}>Ein Elternaccount kann mehrere Spieler betreuen. Die Spieler bleiben eigenständige Mitglieder mit eigenen Teams und Statistiken.</Text>
+            <Text style={styles.label}>Elternteil</Text>
+            <View style={styles.roleRow}>{members.filter((member) => member.id !== childId).map((member) => (
+              <Pressable accessibilityRole="radio" accessibilityState={{ checked: guardianId === member.id }} key={`guardian:${member.id}`} onPress={() => setGuardianId(member.id)} style={[styles.roleButton, guardianId === member.id && styles.roleButtonActive]}>
+                <Text style={[styles.roleText, guardianId === member.id && styles.roleTextActive]}>{member.name}</Text>
+              </Pressable>
+            ))}</View>
+            <Text style={styles.label}>Kind / Spieler</Text>
+            <View style={styles.roleRow}>{members.filter((member) => member.id !== guardianId && member.teams.some((team) => team.roles.includes('player'))).map((member) => (
+              <Pressable accessibilityRole="radio" accessibilityState={{ checked: childId === member.id }} key={`child:${member.id}`} onPress={() => setChildId(member.id)} style={[styles.roleButton, childId === member.id && styles.roleButtonActive]}>
+                <Text style={[styles.roleText, childId === member.id && styles.roleTextActive]}>{member.name}</Text>
+              </Pressable>
+            ))}</View>
+            <Pressable accessibilityRole="button" disabled={!guardianId || !childId || isSubmitting} onPress={() => saveGuardianLink(guardianId, childId, true)} style={[styles.primaryButton, (!guardianId || !childId) && styles.disabled]}>
+              <Text style={styles.primaryText}>Verknüpfung speichern</Text>
+            </Pressable>
+            {guardianLinks.map((link) => (
+              <View key={link.id} style={styles.invitationRow}>
+                <Text style={styles.memberName}>{members.find((member) => member.id === link.guardian_membership_id)?.name} betreut {members.find((member) => member.id === link.child_membership_id)?.name}</Text>
+                <Pressable accessibilityRole="button" onPress={() => saveGuardianLink(link.guardian_membership_id, link.child_membership_id, false)} style={styles.revokeButton}><Text style={styles.revokeText}>Verknüpfung lösen</Text></Pressable>
+              </View>
+            ))}
+          </View>
+        ) : null}
+
         {canManage && editingMemberId ? (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Mitglied bearbeiten</Text>
@@ -335,7 +395,7 @@ export default function MembersScreen() {
               <View key={`edit:${team.id}`} style={styles.assignmentRow}>
                 <Text style={styles.teamName}>{team.name}</Text>
                 <View style={styles.roleRow}>
-                  {['player', 'coach'].map((role) => {
+                  {['player', 'coach', 'guardian'].map((role) => {
                     const selected = editAssignments[team.id]?.includes(role);
                     return (
                       <Pressable
@@ -405,7 +465,7 @@ const styles = StyleSheet.create({
   input: { borderColor: colors.border, borderRadius: 10, borderWidth: 1, color: colors.ink, fontSize: 16, paddingHorizontal: 14, paddingVertical: 13 },
   assignmentRow: { alignItems: 'center', borderTopColor: colors.border, borderTopWidth: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 12, justifyContent: 'space-between', paddingVertical: 12 },
   teamName: { color: colors.ink, fontSize: 15, fontWeight: '800' },
-  roleRow: { flexDirection: 'row', gap: 8 },
+  roleRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   roleButton: { borderColor: colors.border, borderRadius: 999, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 8 },
   roleButtonActive: { backgroundColor: colors.blue, borderColor: colors.blue },
   roleText: { color: colors.muted, fontSize: 12, fontWeight: '800' },

@@ -25,8 +25,7 @@ type EventView = {
   maybe: number;
   no: number;
   total: number;
-  canRespond: boolean;
-  myResponse: string | null;
+  responders: Array<{ membershipId: string; name: string; response: string | null }>;
 };
 
 const toIso = (value: string) => new Date(value).toISOString();
@@ -60,6 +59,15 @@ export default function EventsScreen() {
     setError(null);
 
     const { data: membership } = await supabase.from('memberships').select('id').eq('club_id', activeWorkspace.clubId).eq('profile_id', session.user.id).maybeSingle();
+    const { data: guardianRows } = membership?.id ? await supabase.from('guardian_child_links').select('child_membership_id').eq('guardian_membership_id', membership.id) : { data: [] };
+    const managedIds = (guardianRows ?? []).map((row) => row.child_membership_id);
+    const { data: managedMembers } = managedIds.length ? await supabase.from('memberships').select('id,profile_id').in('id', managedIds) : { data: [] };
+    const managedProfileIds = (managedMembers ?? []).map((row) => row.profile_id);
+    const { data: managedProfiles } = managedProfileIds.length ? await supabase.from('profiles').select('id,display_name').in('id', managedProfileIds) : { data: [] };
+    const identities = [
+      ...(membership?.id ? [{ membershipId: membership.id, name: 'Ich' }] : []),
+      ...(managedMembers ?? []).map((member) => ({ membershipId: member.id, name: (managedProfiles ?? []).find((profile) => profile.id === member.profile_id)?.display_name ?? 'Kind' })),
+    ];
     const { data: eventRows, error: eventError } = await supabase
       .from('events')
       .select('id, title, event_type, starts_at, ends_at, location, event_teams(team_id), event_responses(membership_id, response)')
@@ -94,8 +102,7 @@ export default function EventsScreen() {
         maybe: responses.filter((row) => row.response === 'maybe').length,
         no: responses.filter((row) => row.response === 'no').length,
         total: participantIds.size,
-        canRespond: Boolean(membership?.id && participantIds.has(membership.id)),
-        myResponse: responses.find((row) => row.membership_id === membership?.id)?.response ?? null,
+        responders: identities.filter((identity) => participantIds.has(identity.membershipId)).map((identity) => ({ ...identity, response: responses.find((row) => row.membership_id === identity.membershipId)?.response ?? null })),
       };
     }));
     setIsLoading(false);
@@ -137,12 +144,12 @@ export default function EventsScreen() {
     }
   };
 
-  const respond = async (eventId: string, response: string) => {
+  const respond = async (eventId: string, membershipId: string, response: string) => {
     if (!supabase) return;
     setIsSubmitting(true);
     setError(null);
     const { error: responseError } = await supabase.rpc('respond_to_event', {
-      target_event_id: eventId, new_response: response, response_note: null,
+      target_event_id: eventId, target_membership_id: membershipId, new_response: response, response_note: null,
     });
     if (responseError) setError(responseError.message);
     else await load();
@@ -199,9 +206,9 @@ export default function EventsScreen() {
             <View key={event.id} style={styles.eventCard}>
               <View style={styles.eventTop}><View><Text style={styles.eventType}>{eventTypeLabels[event.eventType]}</Text><Text style={styles.eventTitle}>{event.title}</Text><Text style={styles.eventMeta}>{formatDate(event.startsAt)}{event.location ? ` · ${event.location}` : ''}</Text></View><Text style={styles.teams}>{event.teamIds.map((id) => teamNameById.get(id)).join(' + ')}</Text></View>
               <View style={styles.metrics}><Text style={styles.yes}>✓ {event.yes} dabei</Text><Text style={styles.maybe}>? {event.maybe} vielleicht</Text><Text style={styles.no}>× {event.no} nicht dabei</Text><Text style={styles.open}>○ {Math.max(0, event.total - event.yes - event.maybe - event.no)} offen</Text></View>
-              {event.canRespond ? <View style={styles.responseRow}>{Object.entries(responseLabels).map(([value, label]) => (
-                <Pressable accessibilityRole="button" key={value} onPress={() => respond(event.id, value)} style={[styles.responseButton, event.myResponse === value && styles.responseActive]}><Text style={[styles.responseText, event.myResponse === value && styles.responseTextActive]}>{label}</Text></Pressable>
-              ))}</View> : <Text style={styles.notTargeted}>Du bist diesem Termin nicht als Spieler oder Trainer zugeordnet.</Text>}
+              {event.responders.length ? event.responders.map((responder) => <View key={responder.membershipId} style={styles.responderBlock}><Text style={styles.responderName}>Rückmeldung für {responder.name}</Text><View style={styles.responseRow}>{Object.entries(responseLabels).map(([value, label]) => (
+                <Pressable accessibilityRole="button" key={value} onPress={() => respond(event.id, responder.membershipId, value)} style={[styles.responseButton, responder.response === value && styles.responseActive]}><Text style={[styles.responseText, responder.response === value && styles.responseTextActive]}>{label}</Text></Pressable>
+              ))}</View></View>) : <Text style={styles.notTargeted}>Weder du noch ein betreutes Kind seid diesem Termin zugeordnet.</Text>}
             </View>
           ))}
         </View>
@@ -218,4 +225,5 @@ const styles = StyleSheet.create({
   primaryButton: { alignItems: 'center', backgroundColor: colors.ink, borderRadius: 12, marginTop: 18, minHeight: 48, padding: 14 }, primaryText: { color: colors.surface, fontSize: 14, fontWeight: '900' }, disabled: { opacity: 0.38 }, error: { color: '#b42318', fontSize: 13, marginTop: 12 }, loader: { marginTop: 18 }, empty: { color: colors.faint, marginTop: 18 },
   eventCard: { borderTopColor: colors.border, borderTopWidth: 1, marginTop: 16, paddingTop: 16 }, eventTop: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'space-between' }, eventType: { color: colors.blue, fontSize: 10, fontWeight: '900', letterSpacing: 1 }, eventTitle: { color: colors.ink, fontSize: 18, fontWeight: '900', marginTop: 3 }, eventMeta: { color: colors.muted, fontSize: 12, marginTop: 4 }, teams: { backgroundColor: colors.blueSoft, borderRadius: 9, color: colors.blue, fontSize: 11, fontWeight: '800', paddingHorizontal: 9, paddingVertical: 6 }, metrics: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 13 }, yes: { color: colors.green, fontSize: 12, fontWeight: '800' }, maybe: { color: colors.orange, fontSize: 12, fontWeight: '800' }, no: { color: '#b42318', fontSize: 12, fontWeight: '800' }, open: { color: colors.faint, fontSize: 12, fontWeight: '800' }, responseRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 13 }, responseButton: { borderColor: colors.border, borderRadius: 9, borderWidth: 1, paddingHorizontal: 11, paddingVertical: 8 }, responseActive: { backgroundColor: colors.ink, borderColor: colors.ink }, responseText: { color: colors.muted, fontSize: 12, fontWeight: '800' }, responseTextActive: { color: colors.surface },
   notTargeted: { color: colors.faint, fontSize: 12, marginTop: 13 },
+  responderBlock: { marginTop: 13 }, responderName: { color: colors.ink, fontSize: 12, fontWeight: '800' },
 });
