@@ -68,6 +68,9 @@ export default function DashboardScreen() {
             <Pressable accessibilityRole="button" onPress={() => router.push('/events')} style={styles.quickButton}>
               <Text style={styles.quickButtonText}>Termine & Verfügbarkeit</Text>
             </Pressable>
+            <Pressable accessibilityRole="button" onPress={() => router.push('/availability')} style={styles.quickButton}>
+              <Text style={styles.quickButtonText}>Zeitfenster planen</Text>
+            </Pressable>
             <Pressable accessibilityRole="button" onPress={() => router.push('/members')} style={styles.quickButton}>
               <Text style={styles.quickButtonText}>Mitglieder verwalten</Text>
             </Pressable>

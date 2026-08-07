@@ -49,7 +49,10 @@ export default function EventsScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const canManage = Boolean(activeWorkspace?.clubRoles.some((role) => role === 'club_admin' || role === 'cohort_admin'));
+  const isClubManager = Boolean(activeWorkspace?.clubRoles.some((role) => role === 'club_admin' || role === 'cohort_admin'));
+  const coachTeamIds = activeWorkspace?.teams.filter((team) => team.roles.includes('coach')).map((team) => team.id) ?? [];
+  const canManage = isClubManager || coachTeamIds.length > 0;
+  const manageableTeamIds = isClubManager ? activeWorkspace?.teams.map((team) => team.id) ?? [] : coachTeamIds;
 
   const load = useCallback(async () => {
     if (!supabase || !activeWorkspace || !session) return;
@@ -100,7 +103,7 @@ export default function EventsScreen() {
 
   useEffect(() => { void load(); }, [load]);
   useEffect(() => {
-    if (activeWorkspace && selectedTeams.length === 0) setSelectedTeams(activeWorkspace.teams.map((team) => team.id));
+    if (activeWorkspace && selectedTeams.length === 0) setSelectedTeams(manageableTeamIds);
   }, [activeWorkspace?.id]);
 
   const teamNameById = useMemo(() => new Map(activeWorkspace?.teams.map((team) => [team.id, team.name]) ?? []), [activeWorkspace]);
@@ -174,7 +177,7 @@ export default function EventsScreen() {
             </View>
             <Text style={styles.helper}>Format: JJJJ-MM-TTTHH:MM</Text>
             <Text style={styles.label}>Teams</Text>
-            <View style={styles.choiceRow}>{activeWorkspace?.teams.map((team) => {
+            <View style={styles.choiceRow}>{activeWorkspace?.teams.filter((team) => manageableTeamIds.includes(team.id)).map((team) => {
               const selected = selectedTeams.includes(team.id);
               return <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: selected }} key={team.id} onPress={() => setSelectedTeams((current) => selected ? current.filter((id) => id !== team.id) : [...current, team.id])} style={[styles.choice, selected && styles.choiceActive]}><Text style={[styles.choiceText, selected && styles.choiceTextActive]}>{team.name}</Text></Pressable>;
             })}</View>
