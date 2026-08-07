@@ -12,6 +12,7 @@ const eventTypeLabels: Record<string, string> = {
   training: 'Training', match: 'Spiel', tournament: 'Turnier', meeting: 'Besprechung', other: 'Sonstiges',
 };
 const responseLabels: Record<string, string> = { yes: 'Dabei', maybe: 'Vielleicht', no: 'Nicht dabei' };
+const recurrenceOptions = [{ value: 'none', label: 'Einmalig' }, { value: 'weekly', label: 'Wöchentlich' }] as const;
 
 type EventView = {
   id: string;
@@ -20,6 +21,11 @@ type EventView = {
   startsAt: string;
   endsAt: string;
   location: string;
+  notes: string;
+  responseDeadline: string | null;
+  meetingAt: string | null;
+  meetingLocation: string;
+  recurrenceGroupId: string | null;
   teamIds: string[];
   yes: number;
   maybe: number;
@@ -29,6 +35,8 @@ type EventView = {
 };
 
 const toIso = (value: string) => new Date(value).toISOString();
+const optionalIso = (value: string) => value.trim() ? toIso(value) : null;
+const toLocalInput = (value: string | null) => value ? new Date(value).toLocaleString('sv-SE', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(' ', 'T') : '';
 const formatDate = (value: string) => new Intl.DateTimeFormat('de-DE', {
   dateStyle: 'medium', timeStyle: 'short',
 }).format(new Date(value));
@@ -43,6 +51,12 @@ export default function EventsScreen() {
   const [endsAt, setEndsAt] = useState('2026-08-11T19:00');
   const [location, setLocation] = useState('');
   const [notes, setNotes] = useState('');
+  const [responseDeadline, setResponseDeadline] = useState('');
+  const [meetingAt, setMeetingAt] = useState('');
+  const [meetingLocation, setMeetingLocation] = useState('');
+  const [recurrence, setRecurrence] = useState('none');
+  const [recurrenceEndsOn, setRecurrenceEndsOn] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedTeams, setSelectedTeams] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -70,7 +84,7 @@ export default function EventsScreen() {
     ];
     const { data: eventRows, error: eventError } = await supabase
       .from('events')
-      .select('id, title, event_type, starts_at, ends_at, location, event_teams(team_id), event_responses(membership_id, response)')
+      .select('id, title, event_type, starts_at, ends_at, location, notes, response_deadline, meeting_at, meeting_location, recurrence_group_id, event_teams(team_id), event_responses(membership_id, response)')
       .eq('cohort_id', activeWorkspace.cohortId)
       .neq('status', 'cancelled')
       .order('starts_at');
@@ -97,6 +111,11 @@ export default function EventsScreen() {
         startsAt: event.starts_at,
         endsAt: event.ends_at,
         location: event.location ?? '',
+        notes: event.notes ?? '',
+        responseDeadline: event.response_deadline,
+        meetingAt: event.meeting_at,
+        meetingLocation: event.meeting_location ?? '',
+        recurrenceGroupId: event.recurrence_group_id,
         teamIds: targets,
         yes: responses.filter((row) => row.response === 'yes').length,
         maybe: responses.filter((row) => row.response === 'maybe').length,
@@ -120,7 +139,7 @@ export default function EventsScreen() {
     setIsSubmitting(true);
     setError(null);
     try {
-      const { error: createError } = await supabase.rpc('create_team_event', {
+      const { error: createError } = await supabase.rpc('create_event_series', {
         target_club_id: activeWorkspace.clubId,
         target_season_id: activeWorkspace.seasonId,
         target_cohort_id: activeWorkspace.cohortId,
@@ -131,17 +150,47 @@ export default function EventsScreen() {
         event_location: location,
         event_notes: notes,
         target_team_ids: selectedTeams,
+        target_response_deadline: optionalIso(responseDeadline),
+        target_meeting_at: optionalIso(meetingAt),
+        target_meeting_location: meetingLocation,
+        recurrence,
+        recurrence_ends_on: recurrence === 'weekly' ? recurrenceEndsOn : null,
       });
       if (createError) throw createError;
       setTitle('');
       setLocation('');
       setNotes('');
+      setResponseDeadline(''); setMeetingAt(''); setMeetingLocation(''); setRecurrence('none'); setRecurrenceEndsOn('');
       await load();
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : 'Termin konnte nicht erstellt werden.');
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const beginEdit = (event: EventView) => {
+    setEditingId(event.id); setTitle(event.title); setEventType(event.eventType); setStartsAt(toLocalInput(event.startsAt));
+    setEndsAt(toLocalInput(event.endsAt)); setLocation(event.location); setNotes(event.notes); setSelectedTeams(event.teamIds);
+    setResponseDeadline(toLocalInput(event.responseDeadline)); setMeetingAt(toLocalInput(event.meetingAt)); setMeetingLocation(event.meetingLocation);
+    setRecurrence('none'); setRecurrenceEndsOn(''); setError(null);
+  };
+
+  const saveEvent = async () => {
+    if (!supabase || !editingId) return; setIsSubmitting(true); setError(null);
+    const { error: saveError } = await supabase.rpc('update_team_event', {
+      target_event_id: editingId, event_title: title.trim(), target_event_type: eventType,
+      event_starts_at: toIso(startsAt), event_ends_at: toIso(endsAt), event_location: location, event_notes: notes,
+      target_team_ids: selectedTeams, target_response_deadline: optionalIso(responseDeadline), target_meeting_at: optionalIso(meetingAt), target_meeting_location: meetingLocation,
+    });
+    setIsSubmitting(false); if (saveError) { setError(saveError.message); return; }
+    setEditingId(null); setTitle(''); setLocation(''); setNotes(''); setResponseDeadline(''); setMeetingAt(''); setMeetingLocation(''); await load();
+  };
+
+  const cancelEvent = async (eventId: string) => {
+    if (!supabase) return; setIsSubmitting(true); setError(null);
+    const { error: cancelError } = await supabase.rpc('cancel_team_event', { target_event_id: eventId });
+    setIsSubmitting(false); if (cancelError) setError(cancelError.message); else { if (editingId === eventId) setEditingId(null); await load(); }
   };
 
   const respond = async (eventId: string, membershipId: string, response: string) => {
@@ -169,7 +218,7 @@ export default function EventsScreen() {
 
         {canManage ? (
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Termin erstellen</Text>
+            <Text style={styles.cardTitle}>{editingId ? 'Termin bearbeiten' : 'Termin erstellen'}</Text>
             <Text style={styles.label}>Titel</Text>
             <TextInput onChangeText={setTitle} placeholder="Gemeinsames Training" style={styles.input} value={title} />
             <Text style={styles.label}>Art</Text>
@@ -183,6 +232,11 @@ export default function EventsScreen() {
               <View style={styles.column}><Text style={styles.label}>Ende</Text><TextInput onChangeText={setEndsAt} placeholder="2026-08-11T19:00" style={styles.input} value={endsAt} /></View>
             </View>
             <Text style={styles.helper}>Format: JJJJ-MM-TTTHH:MM</Text>
+            <View style={styles.columns}>
+              <View style={styles.column}><Text style={styles.label}>Zusagefrist</Text><TextInput onChangeText={setResponseDeadline} placeholder="2026-08-10T18:00" style={styles.input} value={responseDeadline} /></View>
+              <View style={styles.column}><Text style={styles.label}>Treffpunkt / Abfahrt</Text><TextInput onChangeText={setMeetingAt} placeholder="2026-08-11T16:45" style={styles.input} value={meetingAt} /></View>
+            </View>
+            <Text style={styles.label}>Treffpunkt</Text><TextInput onChangeText={setMeetingLocation} placeholder="Vereinsheim oder Parkplatz" style={styles.input} value={meetingLocation} />
             <Text style={styles.label}>Teams</Text>
             <View style={styles.choiceRow}>{activeWorkspace?.teams.filter((team) => manageableTeamIds.includes(team.id)).map((team) => {
               const selected = selectedTeams.includes(team.id);
@@ -190,10 +244,11 @@ export default function EventsScreen() {
             })}</View>
             <Text style={styles.label}>Ort</Text><TextInput onChangeText={setLocation} placeholder="Sportplatz" style={styles.input} value={location} />
             <Text style={styles.label}>Hinweise</Text><TextInput multiline onChangeText={setNotes} placeholder="Optional" style={[styles.input, styles.notes]} value={notes} />
+            {!editingId ? <><Text style={styles.label}>Wiederholung</Text><View style={styles.choiceRow}>{recurrenceOptions.map(({ value,label }) => <Pressable accessibilityRole="radio" accessibilityState={{ checked: recurrence === value }} key={value} onPress={() => setRecurrence(value)} style={[styles.choice, recurrence === value && styles.choiceActive]}><Text style={[styles.choiceText, recurrence === value && styles.choiceTextActive]}>{label}</Text></Pressable>)}</View>{recurrence === 'weekly' ? <><Text style={styles.label}>Wiederholen bis</Text><TextInput onChangeText={setRecurrenceEndsOn} placeholder="2026-12-15" style={styles.input} value={recurrenceEndsOn} /></> : null}</> : null}
             {error ? <Text style={styles.error}>{error}</Text> : null}
-            <Pressable accessibilityRole="button" disabled={title.trim().length < 2 || selectedTeams.length === 0 || isSubmitting} onPress={createEvent} style={[styles.primaryButton, (title.trim().length < 2 || selectedTeams.length === 0) && styles.disabled]}>
-              {isSubmitting ? <ActivityIndicator color={colors.surface} /> : <Text style={styles.primaryText}>Termin veröffentlichen</Text>}
-            </Pressable>
+            <View style={styles.formActions}>{editingId ? <Pressable accessibilityRole="button" onPress={() => setEditingId(null)} style={styles.secondaryButton}><Text style={styles.secondaryText}>Abbrechen</Text></Pressable> : null}<Pressable accessibilityRole="button" disabled={title.trim().length < 2 || selectedTeams.length === 0 || isSubmitting || (recurrence === 'weekly' && !recurrenceEndsOn)} onPress={editingId ? saveEvent : createEvent} style={[styles.primaryButton, styles.formPrimary, (title.trim().length < 2 || selectedTeams.length === 0) && styles.disabled]}>
+              {isSubmitting ? <ActivityIndicator color={colors.surface} /> : <Text style={styles.primaryText}>{editingId ? 'Änderungen speichern' : recurrence === 'weekly' ? 'Terminserie veröffentlichen' : 'Termin veröffentlichen'}</Text>}
+            </Pressable></View>
           </View>
         ) : null}
 
@@ -205,10 +260,12 @@ export default function EventsScreen() {
           {events.map((event) => (
             <View key={event.id} style={styles.eventCard}>
               <View style={styles.eventTop}><View><Text style={styles.eventType}>{eventTypeLabels[event.eventType]}</Text><Text style={styles.eventTitle}>{event.title}</Text><Text style={styles.eventMeta}>{formatDate(event.startsAt)}{event.location ? ` · ${event.location}` : ''}</Text></View><Text style={styles.teams}>{event.teamIds.map((id) => teamNameById.get(id)).join(' + ')}</Text></View>
+              {event.meetingAt || event.responseDeadline ? <View style={styles.details}>{event.meetingAt ? <Text style={styles.detailText}>Treffen {formatDate(event.meetingAt)}{event.meetingLocation ? ` · ${event.meetingLocation}` : ''}</Text> : null}{event.responseDeadline ? <Text style={styles.detailText}>Zusage bis {formatDate(event.responseDeadline)}</Text> : null}{event.recurrenceGroupId ? <Text style={styles.seriesTag}>Terminserie</Text> : null}</View> : null}
               <View style={styles.metrics}><Text style={styles.yes}>✓ {event.yes} dabei</Text><Text style={styles.maybe}>? {event.maybe} vielleicht</Text><Text style={styles.no}>× {event.no} nicht dabei</Text><Text style={styles.open}>○ {Math.max(0, event.total - event.yes - event.maybe - event.no)} offen</Text></View>
-              {event.responders.length ? event.responders.map((responder) => <View key={responder.membershipId} style={styles.responderBlock}><Text style={styles.responderName}>Rückmeldung für {responder.name}</Text><View style={styles.responseRow}>{Object.entries(responseLabels).map(([value, label]) => (
+              {event.responders.length ? event.responders.map((responder) => { const deadlinePassed = Boolean(event.responseDeadline && new Date(event.responseDeadline) < new Date()); return <View key={responder.membershipId} style={styles.responderBlock}><Text style={styles.responderName}>Rückmeldung für {responder.name}</Text>{deadlinePassed ? <Text style={styles.deadlinePassed}>Zusagefrist abgelaufen</Text> : <View style={styles.responseRow}>{Object.entries(responseLabels).map(([value, label]) => (
                 <Pressable accessibilityRole="button" key={value} onPress={() => respond(event.id, responder.membershipId, value)} style={[styles.responseButton, responder.response === value && styles.responseActive]}><Text style={[styles.responseText, responder.response === value && styles.responseTextActive]}>{label}</Text></Pressable>
-              ))}</View></View>) : <Text style={styles.notTargeted}>Weder du noch ein betreutes Kind seid diesem Termin zugeordnet.</Text>}
+              ))}</View>}</View>; }) : <Text style={styles.notTargeted}>Weder du noch ein betreutes Kind seid diesem Termin zugeordnet.</Text>}
+              {canManage && event.teamIds.every((id) => manageableTeamIds.includes(id)) ? <View style={styles.manageActions}><Pressable accessibilityRole="button" onPress={() => beginEdit(event)} style={styles.secondaryButton}><Text style={styles.secondaryText}>Bearbeiten</Text></Pressable><Pressable accessibilityRole="button" onPress={() => cancelEvent(event.id)} style={styles.cancelButton}><Text style={styles.cancelText}>Absagen</Text></Pressable></View> : null}
             </View>
           ))}
         </View>
@@ -226,4 +283,7 @@ const styles = StyleSheet.create({
   eventCard: { borderTopColor: colors.border, borderTopWidth: 1, marginTop: 16, paddingTop: 16 }, eventTop: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'space-between' }, eventType: { color: colors.blue, fontSize: 10, fontWeight: '900', letterSpacing: 1 }, eventTitle: { color: colors.ink, fontSize: 18, fontWeight: '900', marginTop: 3 }, eventMeta: { color: colors.muted, fontSize: 12, marginTop: 4 }, teams: { backgroundColor: colors.blueSoft, borderRadius: 9, color: colors.blue, fontSize: 11, fontWeight: '800', paddingHorizontal: 9, paddingVertical: 6 }, metrics: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 13 }, yes: { color: colors.green, fontSize: 12, fontWeight: '800' }, maybe: { color: colors.orange, fontSize: 12, fontWeight: '800' }, no: { color: '#b42318', fontSize: 12, fontWeight: '800' }, open: { color: colors.faint, fontSize: 12, fontWeight: '800' }, responseRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 13 }, responseButton: { borderColor: colors.border, borderRadius: 9, borderWidth: 1, paddingHorizontal: 11, paddingVertical: 8 }, responseActive: { backgroundColor: colors.ink, borderColor: colors.ink }, responseText: { color: colors.muted, fontSize: 12, fontWeight: '800' }, responseTextActive: { color: colors.surface },
   notTargeted: { color: colors.faint, fontSize: 12, marginTop: 13 },
   responderBlock: { marginTop: 13 }, responderName: { color: colors.ink, fontSize: 12, fontWeight: '800' },
+  details: { backgroundColor: colors.canvas, borderRadius: 10, gap: 4, marginTop: 11, padding: 10 }, detailText: { color: colors.muted, fontSize: 12, fontWeight: '700' }, seriesTag: { color: colors.blue, fontSize: 10, fontWeight: '900' },
+  deadlinePassed: { color: '#b42318', fontSize: 11, fontWeight: '800', marginTop: 5 }, formActions: { alignItems: 'center', flexDirection: 'row', flexWrap: 'wrap', gap: 9, justifyContent: 'flex-end', marginTop: 18 }, formPrimary: { flex: 1, marginTop: 0 },
+  secondaryButton: { borderColor: colors.border, borderRadius: 11, borderWidth: 1, padding: 13 }, secondaryText: { color: colors.ink, fontSize: 12, fontWeight: '800' }, manageActions: { flexDirection: 'row', gap: 8, justifyContent: 'flex-end', marginTop: 13 }, cancelButton: { borderColor: '#fda29b', borderRadius: 11, borderWidth: 1, padding: 13 }, cancelText: { color: '#b42318', fontSize: 12, fontWeight: '800' },
 });
