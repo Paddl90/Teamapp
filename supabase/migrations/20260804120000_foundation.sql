@@ -276,6 +276,9 @@ alter table public.cohorts enable row level security;
 alter table public.teams enable row level security;
 alter table public.team_memberships enable row level security;
 
+grant usage on schema public to authenticated;
+grant select, insert, update, delete on all tables in schema public to authenticated;
+
 create policy profiles_select on public.profiles for select to authenticated
 using (id = auth.uid() or public.shares_club_with(id));
 create policy profiles_update_own on public.profiles for update to authenticated
