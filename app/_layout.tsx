@@ -24,6 +24,7 @@ export default function RootLayout() {
         <Stack.Screen name="register" options={{ title: 'Konto erstellen', presentation: 'modal' }} />
         <Stack.Screen name="setup" options={{ title: 'Arbeitsbereich einrichten' }} />
         <Stack.Screen name="members" options={{ title: 'Mitglieder' }} />
+        <Stack.Screen name="events" options={{ title: 'Termine & Verfügbarkeit' }} />
         <Stack.Screen name="accept-invite" options={{ title: 'Einladung annehmen' }} />
         <Stack.Screen name="dashboard" options={{ headerShown: false }} />
         </Stack>

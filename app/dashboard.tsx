@@ -65,6 +65,9 @@ export default function DashboardScreen() {
 
         {!isDemo && workspace ? (
           <View style={styles.quickActions}>
+            <Pressable accessibilityRole="button" onPress={() => router.push('/events')} style={styles.quickButton}>
+              <Text style={styles.quickButtonText}>Termine & Verfügbarkeit</Text>
+            </Pressable>
             <Pressable accessibilityRole="button" onPress={() => router.push('/members')} style={styles.quickButton}>
               <Text style={styles.quickButtonText}>Mitglieder verwalten</Text>
             </Pressable>
