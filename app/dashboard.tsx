@@ -28,6 +28,12 @@ type DashboardData = {
   };
 };
 
+type DashboardAction = {
+  description: string;
+  label: string;
+  path: '/accept-invite' | '/availability' | '/events' | '/funds' | '/matchday' | '/members' | '/notifications' | '/squad' | '/statistics' | '/training';
+};
+
 const initialData: DashboardData = { playerCount: 0, coachCount: 0, openResponses: 0, nextEvent: null };
 
 export default function DashboardScreen() {
@@ -92,7 +98,32 @@ export default function DashboardScreen() {
       ? `${workspace.cohortName} · ${activeTeam?.name ?? 'Gesamt'}`
       : 'Arbeitsbereich wird geladen';
   const displayName = session?.user.user_metadata?.display_name as string | undefined;
-  const isManager = Boolean(workspace?.clubRoles.some((role) => role === 'club_admin' || role === 'cohort_admin') || workspace?.teams.some((team) => team.roles.includes('coach')));
+  const contextTeamRoles = activeTeam ? activeTeam.roles : [...new Set(workspace?.teams.flatMap((team) => team.roles) ?? [])];
+  const isClubManager = Boolean(workspace?.clubRoles.some((role) => role === 'club_admin' || role === 'cohort_admin'));
+  const isCoach = isClubManager || contextTeamRoles.includes('coach');
+  const isPlayer = contextTeamRoles.includes('player');
+  const isGuardian = Boolean(workspace?.clubRoles.includes('guardian') || contextTeamRoles.includes('guardian'));
+  const roleLabels = [isClubManager && 'Admin', isCoach && !isClubManager && 'Trainer', isPlayer && 'Spieler', isGuardian && 'Elternteil'].filter(Boolean) as string[];
+  const navigationSections: Array<{ title: string; actions: DashboardAction[] }> = [
+    { title: 'Aktuell', actions: [
+      { label: 'Termine & Verfügbarkeit', description: 'Zu- und Absagen sowie Teilnehmerzahlen', path: '/events' },
+      { label: 'Benachrichtigungen', description: 'Neue Termine, Aufgaben und Nominierungen', path: '/notifications' },
+    ] },
+    { title: 'Mein Team', actions: [
+      { label: 'Spieltagsaufstellung', description: 'Kader, Formation und veröffentlichte Aufstellung', path: '/matchday' },
+      { label: 'Statistik', description: 'Einsätze, Tore, Minuten und Saisonwerte', path: '/statistics' },
+      { label: 'Individuelles Training', description: isCoach ? 'Aktivitäten und Vorgaben verwalten' : 'Aktivitäten und Vorgaben ansehen', path: '/training' },
+      { label: 'Kasse & Strafen', description: 'Strafen, Zahlungen und Mannschaftskasse', path: '/funds' },
+    ] },
+    ...(isCoach ? [{ title: 'Planung', actions: [
+      { label: 'Zeitfenster planen', description: 'Geeignete Termine anhand der Verfügbarkeit finden', path: '/availability' as const },
+      { label: 'Saison-Kader planen', description: 'Positionen und Kaderbreite über Teams hinweg', path: '/squad' as const },
+    ] }] : []),
+    { title: 'Organisation', actions: [
+      ...((isClubManager || isCoach || isGuardian) ? [{ label: isClubManager || isCoach ? 'Mitglieder verwalten' : 'Familie & Spieler', description: isClubManager || isCoach ? 'Profile, Teams, Rollen und Familien' : 'Betreute Spieler und Teams', path: '/members' as const }] : []),
+      { label: 'Einladung annehmen', description: 'Weiteren Verein, Bereich oder Team hinzufügen', path: '/accept-invite' },
+    ] },
+  ];
   const metrics = isDemo
     ? demoMetrics
     : [
@@ -128,41 +159,6 @@ export default function DashboardScreen() {
 
         {!isDemo && workspace ? <ContextSwitcher /> : null}
 
-        {!isDemo && workspace ? (
-          <View style={styles.quickActions}>
-            <Pressable accessibilityRole="button" onPress={() => router.push('/events')} style={styles.quickButton}>
-              <Text style={styles.quickButtonText}>Termine & Verfügbarkeit</Text>
-            </Pressable>
-            <Pressable accessibilityRole="button" onPress={() => router.push('/availability')} style={styles.quickButton}>
-              <Text style={styles.quickButtonText}>Zeitfenster planen</Text>
-            </Pressable>
-            <Pressable accessibilityRole="button" onPress={() => router.push('/squad')} style={styles.quickButton}>
-              <Text style={styles.quickButtonText}>Saison-Kader planen</Text>
-            </Pressable>
-            <Pressable accessibilityRole="button" onPress={() => router.push('/matchday')} style={styles.quickButton}>
-              <Text style={styles.quickButtonText}>Spieltagsaufstellung</Text>
-            </Pressable>
-            <Pressable accessibilityRole="button" onPress={() => router.push('/funds')} style={styles.quickButton}>
-              <Text style={styles.quickButtonText}>Kasse & Strafenkatalog</Text>
-            </Pressable>
-            <Pressable accessibilityRole="button" onPress={() => router.push('/statistics')} style={styles.quickButton}>
-              <Text style={styles.quickButtonText}>Statistik</Text>
-            </Pressable>
-            <Pressable accessibilityRole="button" onPress={() => router.push('/training')} style={styles.quickButton}>
-              <Text style={styles.quickButtonText}>Individuelles Training</Text>
-            </Pressable>
-            <Pressable accessibilityRole="button" onPress={() => router.push('/notifications')} style={styles.quickButton}>
-              <Text style={styles.quickButtonText}>Benachrichtigungen</Text>
-            </Pressable>
-            <Pressable accessibilityRole="button" onPress={() => router.push('/members')} style={styles.quickButton}>
-              <Text style={styles.quickButtonText}>{isManager ? 'Mitglieder verwalten' : 'Mitglieder & Familie'}</Text>
-            </Pressable>
-            <Pressable accessibilityRole="button" onPress={() => router.push('/accept-invite')} style={styles.quickButton}>
-              <Text style={styles.quickButtonText}>Einladungscode eingeben</Text>
-            </Pressable>
-          </View>
-        ) : null}
-
         {isDemo ? (
           <View style={styles.demoBanner}>
             <Text style={styles.demoTitle}>Pilotmodus</Text>
@@ -174,6 +170,7 @@ export default function DashboardScreen() {
         <Text style={styles.intro}>
           {workspace ? `${workspace.clubName} · Saison ${workspace.seasonName}` : 'Das Wichtigste für deinen Bereich auf einen Blick.'}
         </Text>
+        {!isDemo && roleLabels.length ? <View style={styles.roleBadges}>{roleLabels.map((role) => <Text key={role} style={styles.roleBadge}>{role}</Text>)}</View> : null}
 
         {error || dashboardError ? (
           <View style={styles.errorBanner}>
@@ -191,6 +188,17 @@ export default function DashboardScreen() {
             </View>
           ))}
         </View>
+
+        {!isDemo && workspace ? <View style={styles.navigation}>{navigationSections.filter((section) => section.actions.length).map((section) => (
+          <View key={section.title} style={styles.navigationSection}>
+            <Text style={styles.navigationTitle}>{section.title}</Text>
+            <View style={styles.actionGrid}>{section.actions.map((action) => (
+              <Pressable accessibilityRole="button" key={action.path} onPress={() => router.push(action.path)} style={styles.actionCard}>
+                <Text style={styles.actionTitle}>{action.label}</Text><Text style={styles.actionDescription}>{action.description}</Text><Text style={styles.actionLink}>Öffnen →</Text>
+              </Pressable>
+            ))}</View>
+          </View>
+        ))}</View> : null}
 
         {!isDemo && !dashboardData.nextEvent ? (
           <Pressable accessibilityRole="button" onPress={() => router.push('/events')} style={styles.emptyNextCard}>
@@ -230,9 +238,12 @@ const styles = StyleSheet.create({
   context: { color: colors.ink, fontSize: 16, fontWeight: '800', marginTop: 3 },
   leaveButton: { borderColor: colors.border, borderRadius: 10, borderWidth: 1, padding: 10 },
   leaveText: { color: colors.ink, fontSize: 13, fontWeight: '700' },
-  quickActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 12 },
-  quickButton: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 10, borderWidth: 1, paddingHorizontal: 13, paddingVertical: 10 },
-  quickButtonText: { color: colors.blue, fontSize: 13, fontWeight: '800' },
+  roleBadges: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginTop: 12 },
+  roleBadge: { backgroundColor: colors.blueSoft, borderRadius: 999, color: colors.blue, fontSize: 11, fontWeight: '900', paddingHorizontal: 10, paddingVertical: 6 },
+  navigation: { marginTop: 12 }, navigationSection: { marginTop: 20 }, navigationTitle: { color: colors.ink, fontSize: 16, fontWeight: '900' },
+  actionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 10 },
+  actionCard: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 15, borderWidth: 1, flexBasis: 230, flexGrow: 1, minHeight: 126, padding: 16 },
+  actionTitle: { color: colors.ink, fontSize: 15, fontWeight: '900' }, actionDescription: { color: colors.muted, fontSize: 12, lineHeight: 18, marginTop: 6 }, actionLink: { color: colors.blue, fontSize: 12, fontWeight: '900', marginTop: 10 },
   demoBanner: {
     backgroundColor: colors.blueSoft,
     borderRadius: 12,
