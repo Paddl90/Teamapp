@@ -34,7 +34,11 @@ export default function DashboardScreen() {
   const metrics = isDemo
     ? demoMetrics
     : [
-        { label: 'Teams', value: String(workspace?.teams.length ?? '–'), detail: workspace?.teams.join(' · ') || 'werden geladen' },
+        {
+          label: 'Teams',
+          value: String(workspace?.teams.length ?? '–'),
+          detail: workspace?.teams.map((team) => team.name).join(' · ') || 'werden geladen',
+        },
         { label: 'Spieler', value: '0', detail: 'Mitglieder als Nächstes einladen' },
         { label: 'Offene Antworten', value: '0', detail: 'noch keine Termine' },
       ];
