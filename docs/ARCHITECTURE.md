@@ -87,6 +87,9 @@ Jedes Modul besitzt UI, Validierung, Datenzugriff, Typen und Tests. Gemeinsam ge
 | `guardian_links` | Eltern-Kind- beziehungsweise Stellvertreterbeziehung |
 | `memberships` | Vereinsmitgliedschaft und Status |
 | `team_memberships` | Stammteam und weitere Mannschaftszuordnung |
+| `team_membership_roles` | teambezogene Rollen, z. B. Spieler oder Trainer |
+| `member_invitations` | zeitlich begrenzte Einladung an eine E-Mail-Adresse |
+| `invitation_team_assignments` | Teams und Rollen, die beim Annehmen vergeben werden |
 | `roles` | definierte Rollen |
 | `role_assignments` | Rollenzuordnung mit Gültigkeitsbereich |
 

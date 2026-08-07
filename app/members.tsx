@@ -1,0 +1,302 @@
+import { Redirect } from 'expo-router';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+
+import { ContextSwitcher } from '@/components/ContextSwitcher';
+import { useAuth } from '@/features/auth/AuthProvider';
+import { useWorkspace } from '@/features/workspace/WorkspaceProvider';
+import { supabase } from '@/lib/supabase';
+import { colors } from '@/theme/colors';
+
+const roleLabels: Record<string, string> = {
+  player: 'Spieler',
+  coach: 'Trainer',
+  guardian: 'Elternteil',
+  treasurer: 'Kassenwart',
+  medical: 'Medizin',
+  club_admin: 'Vereinsadmin',
+  cohort_admin: 'Bereichsadmin',
+};
+
+type MemberView = {
+  id: string;
+  name: string;
+  status: string;
+  clubRoles: string[];
+  teams: Array<{ name: string; roles: string[] }>;
+};
+
+type InvitationView = { id: string; email: string; code: string; status: string };
+
+export default function MembersScreen() {
+  const { session } = useAuth();
+  const { activeWorkspace, isLoading: isWorkspaceLoading } = useWorkspace();
+  const [members, setMembers] = useState<MemberView[]>([]);
+  const [invitations, setInvitations] = useState<InvitationView[]>([]);
+  const [email, setEmail] = useState('');
+  const [assignments, setAssignments] = useState<Record<string, string[]>>({});
+  const [createdCode, setCreatedCode] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const canManage = Boolean(
+    activeWorkspace?.clubRoles.some((role) => role === 'club_admin' || role === 'cohort_admin'),
+  );
+
+  const load = useCallback(async () => {
+    const client = supabase;
+    if (!client || !activeWorkspace) return;
+    setIsLoading(true);
+    setError(null);
+
+    const { data: membershipRows, error: membershipError } = await client
+      .from('memberships')
+      .select('id, profile_id, status')
+      .eq('club_id', activeWorkspace.clubId)
+      .order('created_at');
+
+    if (membershipError) {
+      setError(membershipError.message);
+      setIsLoading(false);
+      return;
+    }
+
+    const membershipIds = (membershipRows ?? []).map((row) => row.id);
+    const profileIds = (membershipRows ?? []).map((row) => row.profile_id);
+    const [{ data: profileRows }, { data: clubRoleRows }, { data: teamMembershipRows }, invitationResult] = await Promise.all([
+      profileIds.length
+        ? client.from('profiles').select('id, display_name').in('id', profileIds)
+        : Promise.resolve({ data: [] }),
+      membershipIds.length
+        ? client.from('membership_roles').select('membership_id, role').in('membership_id', membershipIds)
+        : Promise.resolve({ data: [] }),
+      membershipIds.length
+        ? client
+            .from('team_memberships')
+            .select('id, membership_id, team_id, team_membership_roles(role)')
+            .in('membership_id', membershipIds)
+        : Promise.resolve({ data: [] }),
+      canManage
+        ? client
+            .from('member_invitations')
+            .select('id, email, code, status')
+            .eq('club_id', activeWorkspace.clubId)
+            .order('created_at', { ascending: false })
+            .limit(20)
+        : Promise.resolve({ data: [] }),
+    ]);
+
+    const teamById = new Map(activeWorkspace.teams.map((team) => [team.id, team.name]));
+    setMembers(
+      (membershipRows ?? []).map((membership) => ({
+        id: membership.id,
+        name: (profileRows ?? []).find((profile) => profile.id === membership.profile_id)?.display_name || 'Unbenanntes Mitglied',
+        status: membership.status,
+        clubRoles: (clubRoleRows ?? []).filter((row) => row.membership_id === membership.id).map((row) => row.role),
+        teams: (teamMembershipRows ?? [])
+          .filter((row) => row.membership_id === membership.id && teamById.has(row.team_id))
+          .map((row) => ({
+            name: teamById.get(row.team_id)!,
+            roles: ((row.team_membership_roles ?? []) as Array<{ role: string }>).map((role) => role.role),
+          })),
+      })),
+    );
+    setInvitations((invitationResult.data ?? []) as InvitationView[]);
+    setIsLoading(false);
+  }, [activeWorkspace?.id, canManage]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const selectedAssignments = useMemo(
+    () => Object.entries(assignments).filter(([, roles]) => roles.length > 0),
+    [assignments],
+  );
+
+  const toggleRole = (teamId: string, role: string) => {
+    setAssignments((current) => {
+      const roles = current[teamId] ?? [];
+      return {
+        ...current,
+        [teamId]: roles.includes(role) ? roles.filter((item) => item !== role) : [...roles, role],
+      };
+    });
+  };
+
+  const createInvitation = async () => {
+    if (!supabase || !activeWorkspace || selectedAssignments.length < 1) return;
+    setIsSubmitting(true);
+    setError(null);
+    setCreatedCode(null);
+
+    const { data, error: invitationError } = await supabase.rpc('create_member_invitation', {
+      target_club_id: activeWorkspace.clubId,
+      invite_email: email.trim(),
+      assignments: selectedAssignments.map(([teamId, roles]) => ({ team_id: teamId, roles })),
+    });
+
+    setIsSubmitting(false);
+    if (invitationError) {
+      setError(invitationError.message);
+      return;
+    }
+
+    setCreatedCode(data as string);
+    setEmail('');
+    setAssignments({});
+    await load();
+  };
+
+  if (!session) return <Redirect href="/sign-in" />;
+  if (!isWorkspaceLoading && !activeWorkspace) return <Redirect href="/setup" />;
+
+  return (
+    <ScrollView contentContainerStyle={styles.page}>
+      <View style={styles.shell}>
+        <Text style={styles.eyebrow}>MITGLIEDER & ROLLEN</Text>
+        <Text style={styles.title}>Ein Account, mehrere Aufgaben</Text>
+        <Text style={styles.subtitle}>Rollen werden pro Team vergeben. Dieselbe Person kann dadurch gleichzeitig Spieler und Trainer in unterschiedlichen Teams sein.</Text>
+        <ContextSwitcher />
+
+        {canManage ? (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Mitglied einladen</Text>
+            <Text style={styles.helper}>Die eingeladene Person registriert sich mit dieser E-Mail-Adresse und gibt anschließend den Code ein.</Text>
+            <Text style={styles.label}>E-Mail-Adresse</Text>
+            <TextInput
+              autoCapitalize="none"
+              keyboardType="email-address"
+              onChangeText={setEmail}
+              placeholder="mitglied@verein.de"
+              style={styles.input}
+              value={email}
+            />
+
+            <Text style={styles.label}>Teams und Rollen</Text>
+            {activeWorkspace?.teams.map((team) => (
+              <View key={team.id} style={styles.assignmentRow}>
+                <Text style={styles.teamName}>{team.name}</Text>
+                <View style={styles.roleRow}>
+                  {['player', 'coach'].map((role) => {
+                    const selected = assignments[team.id]?.includes(role);
+                    return (
+                      <Pressable
+                        accessibilityRole="checkbox"
+                        accessibilityState={{ checked: Boolean(selected) }}
+                        key={role}
+                        onPress={() => toggleRole(team.id, role)}
+                        style={[styles.roleButton, selected && styles.roleButtonActive]}
+                      >
+                        <Text style={[styles.roleText, selected && styles.roleTextActive]}>{roleLabels[role]}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            ))}
+
+            {error ? <Text style={styles.error}>{error}</Text> : null}
+            {createdCode ? (
+              <View style={styles.success}>
+                <Text style={styles.successTitle}>Einladung erstellt</Text>
+                <Text style={styles.code}>{createdCode}</Text>
+                <Text style={styles.helper}>Diesen Code sicher an die eingeladene Person weitergeben.</Text>
+              </View>
+            ) : null}
+
+            <Pressable
+              accessibilityRole="button"
+              disabled={!email.includes('@') || selectedAssignments.length < 1 || isSubmitting}
+              onPress={createInvitation}
+              style={[styles.primaryButton, (!email.includes('@') || selectedAssignments.length < 1) && styles.disabled]}
+            >
+              {isSubmitting ? <ActivityIndicator color={colors.surface} /> : <Text style={styles.primaryText}>Einladungscode erstellen</Text>}
+            </Pressable>
+          </View>
+        ) : null}
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Aktive Mitglieder</Text>
+          {isLoading ? <ActivityIndicator color={colors.blue} style={styles.loader} /> : null}
+          {members.map((member) => (
+            <View key={member.id} style={styles.memberRow}>
+              <View style={styles.memberMain}>
+                <Text style={styles.memberName}>{member.name}</Text>
+                {member.clubRoles.length ? <Text style={styles.memberMeta}>{member.clubRoles.map((role) => roleLabels[role] ?? role).join(' · ')}</Text> : null}
+              </View>
+              <View style={styles.memberTeams}>
+                {member.teams.length ? member.teams.map((team) => (
+                  <View key={`${member.id}:${team.name}`} style={styles.teamTag}>
+                    <Text style={styles.teamTagTitle}>{team.name}</Text>
+                    <Text style={styles.teamTagRoles}>{team.roles.map((role) => roleLabels[role] ?? role).join(' + ') || 'zugeordnet'}</Text>
+                  </View>
+                )) : <Text style={styles.unassigned}>Noch keinem Team zugeordnet</Text>}
+              </View>
+            </View>
+          ))}
+        </View>
+
+        {canManage && invitations.length ? (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Letzte Einladungen</Text>
+            {invitations.map((invitation) => (
+              <View key={invitation.id} style={styles.invitationRow}>
+                <View><Text style={styles.memberName}>{invitation.email}</Text><Text style={styles.memberMeta}>{invitation.status}</Text></View>
+                <Text style={styles.smallCode}>{invitation.code}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+      </View>
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  page: { backgroundColor: colors.canvas, minHeight: '100%', padding: 20, paddingBottom: 48 },
+  shell: { alignSelf: 'center', maxWidth: 920, width: '100%' },
+  eyebrow: { color: colors.blue, fontSize: 11, fontWeight: '900', letterSpacing: 1.4, marginTop: 14 },
+  title: { color: colors.ink, fontSize: 34, fontWeight: '900', marginTop: 8 },
+  subtitle: { color: colors.muted, fontSize: 15, lineHeight: 22, marginTop: 8, maxWidth: 700 },
+  card: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 18, borderWidth: 1, marginTop: 18, padding: 20 },
+  cardTitle: { color: colors.ink, fontSize: 19, fontWeight: '900' },
+  helper: { color: colors.muted, fontSize: 13, lineHeight: 19, marginTop: 5 },
+  label: { color: colors.ink, fontSize: 13, fontWeight: '800', marginBottom: 7, marginTop: 16 },
+  input: { borderColor: colors.border, borderRadius: 10, borderWidth: 1, color: colors.ink, fontSize: 16, paddingHorizontal: 14, paddingVertical: 13 },
+  assignmentRow: { alignItems: 'center', borderTopColor: colors.border, borderTopWidth: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 12, justifyContent: 'space-between', paddingVertical: 12 },
+  teamName: { color: colors.ink, fontSize: 15, fontWeight: '800' },
+  roleRow: { flexDirection: 'row', gap: 8 },
+  roleButton: { borderColor: colors.border, borderRadius: 999, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 8 },
+  roleButtonActive: { backgroundColor: colors.blue, borderColor: colors.blue },
+  roleText: { color: colors.muted, fontSize: 12, fontWeight: '800' },
+  roleTextActive: { color: colors.surface },
+  primaryButton: { alignItems: 'center', backgroundColor: colors.ink, borderRadius: 12, marginTop: 18, minHeight: 48, padding: 14 },
+  primaryText: { color: colors.surface, fontSize: 14, fontWeight: '900' },
+  disabled: { opacity: 0.38 },
+  error: { color: '#b42318', fontSize: 13, marginTop: 12 },
+  success: { backgroundColor: '#ecfdf3', borderRadius: 12, marginTop: 14, padding: 14 },
+  successTitle: { color: colors.green, fontWeight: '900' },
+  code: { color: colors.ink, fontSize: 26, fontWeight: '900', letterSpacing: 2, marginTop: 6 },
+  loader: { marginTop: 16 },
+  memberRow: { borderTopColor: colors.border, borderTopWidth: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 12, justifyContent: 'space-between', paddingVertical: 14 },
+  memberMain: { minWidth: 180 },
+  memberName: { color: colors.ink, fontSize: 15, fontWeight: '800' },
+  memberMeta: { color: colors.muted, fontSize: 12, marginTop: 3 },
+  memberTeams: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  teamTag: { backgroundColor: colors.blueSoft, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 7 },
+  teamTagTitle: { color: colors.blue, fontSize: 12, fontWeight: '900' },
+  teamTagRoles: { color: colors.muted, fontSize: 11, marginTop: 2 },
+  unassigned: { color: colors.faint, fontSize: 12 },
+  invitationRow: { alignItems: 'center', borderTopColor: colors.border, borderTopWidth: 1, flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 12 },
+  smallCode: { color: colors.ink, fontSize: 14, fontWeight: '900', letterSpacing: 1 },
+});

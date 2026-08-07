@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 
 import { useAuth } from '@/features/auth/AuthProvider';
+import { useWorkspace } from '@/features/workspace/WorkspaceProvider';
 import { supabase } from '@/lib/supabase';
 import { colors } from '@/theme/colors';
 
@@ -41,6 +42,7 @@ function slugify(value: string) {
 export default function SetupScreen() {
   const router = useRouter();
   const { isLoading, session } = useAuth();
+  const { refresh } = useWorkspace();
   const defaults = useMemo(seasonDefaults, []);
   const [clubName, setClubName] = useState('');
   const [clubSlug, setClubSlug] = useState('');
@@ -102,6 +104,7 @@ export default function SetupScreen() {
       setError(createError.message);
       return;
     }
+    await refresh();
     router.replace('/dashboard');
   };
 
@@ -114,6 +117,10 @@ export default function SetupScreen() {
           <Text style={styles.subtitle}>
             Altersklasse, Abteilung oder Trainingsgruppe: Du bestimmst die Bezeichnung und kannst beliebig viele Teams ergänzen.
           </Text>
+
+          <Pressable accessibilityRole="button" onPress={() => router.push('/accept-invite')} style={styles.inviteLink}>
+            <Text style={styles.inviteLinkText}>Du wurdest eingeladen? Einladungscode eingeben</Text>
+          </Pressable>
 
           <Section number="1" title="Verein">
             <Field label="Vereinsname" value={clubName} onChangeText={updateClubName} placeholder="z. B. SV Musterstadt" />
@@ -229,4 +236,6 @@ const styles = StyleSheet.create({
   submitText: { color: colors.surface, fontSize: 16, fontWeight: '900' },
   disabled: { opacity: 0.38 },
   pressed: { opacity: 0.72 },
+  inviteLink: { alignSelf: 'flex-start', marginTop: 12, paddingVertical: 8 },
+  inviteLinkText: { color: colors.blue, fontSize: 14, fontWeight: '800' },
 });
