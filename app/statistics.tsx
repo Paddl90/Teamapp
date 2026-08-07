@@ -20,7 +20,7 @@ type MatchPlanRow = {
   team_id: string;
   status: string;
   match_squad_entries: Array<{ membership_id: string; squad_role: string }>;
-  match_results: Array<{ match_minutes: number; status: string }>;
+  match_results: Array<{ match_minutes: number; status: string }> | { match_minutes: number; status: string } | null;
   match_incidents: Array<{ incident_type: string; minute: number; membership_id: string; related_membership_id: string | null }>;
 };
 type PlayerStatistic = {
@@ -43,6 +43,7 @@ type PlayerStatistic = {
 };
 
 const percent = (value: number, total: number) => total > 0 ? Math.round((value / total) * 100) : 0;
+const resultFor = (plan: MatchPlanRow) => Array.isArray(plan.match_results) ? plan.match_results[0] : plan.match_results;
 
 export default function StatisticsScreen() {
   const { session } = useAuth();
@@ -109,7 +110,7 @@ export default function StatisticsScreen() {
     setNames(new Map((membershipResult.data ?? []).map((row) => [row.id, profileById.get(row.profile_id) ?? 'Unbekannt'])));
     setAssignments(playerAssignments);
     setEvents((eventResult.data ?? []) as EventRow[]);
-    setMatchPlans((matchResult.data ?? []) as MatchPlanRow[]);
+    setMatchPlans((matchResult.data ?? []) as unknown as MatchPlanRow[]);
     setIsLoading(false);
   }, [activeWorkspace?.id, session?.user.id]);
 
@@ -137,14 +138,14 @@ export default function StatisticsScreen() {
       const targetedEvents = visibleEvents.filter((event) => event.event_teams.some((team) => teamIds.includes(team.team_id)));
       const responses = targetedEvents.map((event) => event.event_responses.find((response) => response.membership_id === membershipId)?.response ?? 'open');
       const squadEntries = visiblePlans.flatMap((plan) => plan.match_squad_entries.filter((entry) => entry.membership_id === membershipId));
-      const completedPlans = visiblePlans.filter((plan) => plan.match_results[0]?.status === 'completed');
+      const completedPlans = visiblePlans.filter((plan) => resultFor(plan)?.status === 'completed');
       const appearances = completedPlans.filter((plan) => {
         const squad = plan.match_squad_entries.find((entry) => entry.membership_id === membershipId);
         return squad?.squad_role === 'starting' || plan.match_incidents.some((incident) => incident.incident_type === 'substitution' && incident.related_membership_id === membershipId);
       }).length;
       const minutes = completedPlans.reduce((sum, plan) => {
         const squad = plan.match_squad_entries.find((entry) => entry.membership_id === membershipId);
-        const total = plan.match_results[0]?.match_minutes ?? 0;
+        const total = resultFor(plan)?.match_minutes ?? 0;
         if (squad?.squad_role === 'starting') {
           const substituted = plan.match_incidents.find((incident) => incident.incident_type === 'substitution' && incident.membership_id === membershipId);
           return sum + Math.min(total, substituted?.minute ?? total);
