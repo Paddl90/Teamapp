@@ -4,6 +4,7 @@ dist/
 web-build/
 .env
 .env.local
+.env.vps
 *.log
 .DS_Store
 coverage/
