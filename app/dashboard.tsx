@@ -2,10 +2,11 @@ import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { useAuth } from '@/features/auth/AuthProvider';
+import { useWorkspace } from '@/features/workspace/useWorkspace';
 import { colors } from '@/theme/colors';
 
-const metrics = [
-  { label: 'Spieler', value: '36', detail: '20 B1 · 16 B2' },
+const demoMetrics = [
+  { label: 'Spieler', value: '54', detail: 'auf 3 Teams verteilt' },
   { label: 'Trainer', value: '6', detail: '4 heute verfügbar' },
   { label: 'Offene Antworten', value: '9', detail: 'für Dienstag' },
 ] as const;
@@ -15,8 +16,28 @@ export default function DashboardScreen() {
   const { demo } = useLocalSearchParams<{ demo?: string }>();
   const { isLoading, session, signOut } = useAuth();
   const isDemo = demo === '1';
+  const { error, isLoading: isWorkspaceLoading, workspace } = useWorkspace(
+    isDemo ? undefined : session?.user.id,
+  );
 
   if (!isLoading && !session && !isDemo) return <Redirect href="/sign-in" />;
+  if (!isDemo && session && !isWorkspaceLoading && !workspace && !error) {
+    return <Redirect href="/setup" />;
+  }
+
+  const context = isDemo
+    ? 'Jugendbereich · Gesamt'
+    : workspace
+      ? `${workspace.cohortName} · Gesamt`
+      : 'Arbeitsbereich wird geladen';
+  const displayName = session?.user.user_metadata?.display_name as string | undefined;
+  const metrics = isDemo
+    ? demoMetrics
+    : [
+        { label: 'Teams', value: String(workspace?.teams.length ?? '–'), detail: workspace?.teams.join(' · ') || 'werden geladen' },
+        { label: 'Spieler', value: '0', detail: 'Mitglieder als Nächstes einladen' },
+        { label: 'Offene Antworten', value: '0', detail: 'noch keine Termine' },
+      ];
 
   const leave = async () => {
     await signOut();
@@ -29,7 +50,7 @@ export default function DashboardScreen() {
         <View style={styles.topbar}>
           <View>
             <Text style={styles.brand}>TEAMAPP</Text>
-            <Text style={styles.context}>B-Jugend · Gesamt</Text>
+            <Text style={styles.context}>{context}</Text>
           </View>
           <Pressable onPress={leave} style={styles.leaveButton}>
             <Text style={styles.leaveText}>{isDemo ? 'Pilot verlassen' : 'Abmelden'}</Text>
@@ -43,8 +64,17 @@ export default function DashboardScreen() {
           </View>
         ) : null}
 
-        <Text style={styles.greeting}>Guten Tag, Trainerteam.</Text>
-        <Text style={styles.intro}>Das Wichtigste für euren Jahrgang auf einen Blick.</Text>
+        <Text style={styles.greeting}>Guten Tag{displayName ? `, ${displayName}` : ''}.</Text>
+        <Text style={styles.intro}>
+          {workspace ? `${workspace.clubName} · Saison ${workspace.seasonName}` : 'Das Wichtigste für deinen Bereich auf einen Blick.'}
+        </Text>
+
+        {error ? (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorTitle}>Arbeitsbereich konnte nicht geladen werden</Text>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : null}
 
         <View style={styles.metrics}>
           {metrics.map((metric) => (
@@ -96,6 +126,9 @@ const styles = StyleSheet.create({
   },
   demoTitle: { color: colors.blue, fontWeight: '800' },
   demoText: { color: colors.muted, fontSize: 13, marginTop: 3 },
+  errorBanner: { backgroundColor: '#fef3f2', borderRadius: 12, marginTop: 18, padding: 14 },
+  errorTitle: { color: '#b42318', fontWeight: '800' },
+  errorText: { color: '#7a271a', fontSize: 13, marginTop: 3 },
   greeting: {
     color: colors.ink,
     fontSize: 36,

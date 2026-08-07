@@ -102,6 +102,10 @@ export default function SignInScreen() {
         <Pressable onPress={() => router.replace('/dashboard?demo=1')} style={styles.demoLink}>
           <Text style={styles.demoLinkText}>Stattdessen Pilot ansehen</Text>
         </Pressable>
+
+        <Pressable onPress={() => router.push('/register')} style={styles.demoLink}>
+          <Text style={styles.demoLinkText}>Noch kein Konto? Registrieren</Text>
+        </Pressable>
       </View>
     </KeyboardAvoidingView>
   );

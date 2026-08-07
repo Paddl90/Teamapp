@@ -8,6 +8,11 @@ type AuthContextValue = {
   isLoading: boolean;
   isConfigured: boolean;
   signInWithPassword: (email: string, password: string) => Promise<string | null>;
+  signUpWithPassword: (
+    email: string,
+    password: string,
+    displayName: string,
+  ) => Promise<string | null>;
   signOut: () => Promise<void>;
 };
 
@@ -47,6 +52,18 @@ export function AuthProvider({ children }: PropsWithChildren) {
         const { error } = await supabase.auth.signInWithPassword({
           email: email.trim(),
           password,
+        });
+        return error?.message ?? null;
+      },
+      signUpWithPassword: async (email, password, displayName) => {
+        if (!supabase) return 'Supabase ist noch nicht konfiguriert.';
+
+        const { error } = await supabase.auth.signUp({
+          email: email.trim(),
+          password,
+          options: {
+            data: { display_name: displayName.trim() },
+          },
         });
         return error?.message ?? null;
       },

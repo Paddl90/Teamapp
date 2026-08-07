@@ -212,7 +212,7 @@ create or replace function public.create_club_workspace(
   season_starts_on date,
   season_ends_on date,
   cohort_name text,
-  team_names text[] default array['B1', 'B2']::text[]
+  team_names text[] default array[]::text[]
 )
 returns uuid
 language plpgsql

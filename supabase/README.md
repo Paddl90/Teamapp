@@ -9,6 +9,6 @@ Die Migration `migrations/20260804120000_foundation.sql` legt das Fundament für
 3. Die Migration mit der Supabase CLI oder über den SQL-Editor anwenden.
 4. In Supabase Auth die gewünschten Anmelde- und E-Mail-Einstellungen konfigurieren.
 
-Die Funktion `create_club_workspace` erstellt atomar einen Verein, eine Saison, einen Jahrgang, B1/B2 sowie die erste Administratorrolle.
+Die Funktion `create_club_workspace` erstellt atomar einen Verein, eine Saison, einen frei benannten Bereich oder Jahrgang, die explizit uebergebenen Teams sowie die erste Administratorrolle.
 
 Service-Role-Schlüssel dürfen niemals in `.env.local` oder in der Client-App abgelegt werden.
