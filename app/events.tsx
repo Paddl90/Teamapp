@@ -1,4 +1,4 @@
-import { Redirect } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -45,6 +45,7 @@ const formatDate = (value: string) => new Intl.DateTimeFormat('de-DE', {
 }).format(new Date(value));
 
 export default function EventsScreen() {
+  const router = useRouter();
   const { isLoading: isAuthLoading, session } = useAuth();
   const { activeWorkspace, isLoading: isWorkspaceLoading } = useWorkspace();
   const [events, setEvents] = useState<EventView[]>([]);
@@ -66,6 +67,9 @@ export default function EventsScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const [screen, setScreen] = useState<'list' | 'detail' | 'form'>('list');
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
 
   const isClubManager = Boolean(activeWorkspace?.clubRoles.some((role) => role === 'club_admin' || role === 'cohort_admin'));
   const coachTeamIds = activeWorkspace?.teams.filter((team) => team.roles.includes('coach')).map((team) => team.id) ?? [];
@@ -146,6 +150,16 @@ export default function EventsScreen() {
   }, [activeWorkspace?.id]);
 
   const teamNameById = useMemo(() => new Map(activeWorkspace?.teams.map((team) => [team.id, team.name]) ?? []), [activeWorkspace]);
+  const selectedEvent = events.find((event) => event.id === selectedEventId) ?? null;
+
+  const resetForm = () => {
+    setEditingId(null); setTitle(''); setEventType('training'); setLocation(''); setNotes('');
+    setResponseDeadline(''); setMeetingAt(''); setMeetingLocation(''); setRecurrence('none'); setRecurrenceEndsOn('');
+    setSelectedTeams(manageableTeamIds); setError(null);
+  };
+
+  const startCreate = () => { resetForm(); setFeedback(null); setScreen('form'); };
+  const openEvent = (eventId: string) => { setSelectedEventId(eventId); setFeedback(null); setScreen('detail'); };
 
   const createEvent = async () => {
     if (!supabase || !activeWorkspace) return;
@@ -175,6 +189,8 @@ export default function EventsScreen() {
       setNotes('');
       setResponseDeadline(''); setMeetingAt(''); setMeetingLocation(''); setRecurrence('none'); setRecurrenceEndsOn('');
       await load();
+      setFeedback(recurrence === 'weekly' ? 'Terminserie wurde veröffentlicht.' : 'Termin wurde veröffentlicht.');
+      setScreen('list');
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : 'Termin konnte nicht erstellt werden.');
     } finally {
@@ -187,6 +203,7 @@ export default function EventsScreen() {
     setEndsAt(toLocalInput(event.endsAt)); setLocation(event.location); setNotes(event.notes); setSelectedTeams(event.teamIds);
     setResponseDeadline(toLocalInput(event.responseDeadline)); setMeetingAt(toLocalInput(event.meetingAt)); setMeetingLocation(event.meetingLocation);
     setRecurrence('none'); setRecurrenceEndsOn(''); setError(null);
+    setFeedback(null); setScreen('form');
   };
 
   const saveEvent = async () => {
@@ -198,12 +215,13 @@ export default function EventsScreen() {
     });
     setIsSubmitting(false); if (saveError) { setError(saveError.message); return; }
     setEditingId(null); setTitle(''); setLocation(''); setNotes(''); setResponseDeadline(''); setMeetingAt(''); setMeetingLocation(''); await load();
+    setFeedback('Änderungen wurden gespeichert.'); setScreen('detail');
   };
 
   const cancelEvent = async (eventId: string) => {
     if (!supabase) return; setIsSubmitting(true); setError(null);
     const { error: cancelError } = await supabase.rpc('cancel_team_event', { target_event_id: eventId });
-    setIsSubmitting(false); if (cancelError) setError(cancelError.message); else { if (editingId === eventId) setEditingId(null); await load(); }
+    setIsSubmitting(false); if (cancelError) setError(cancelError.message); else { if (editingId === eventId) setEditingId(null); await load(); setFeedback('Termin wurde abgesagt.'); setScreen('list'); setSelectedEventId(null); }
   };
 
   const respond = async (eventId: string, membershipId: string, response: string) => {
@@ -214,94 +232,70 @@ export default function EventsScreen() {
       target_event_id: eventId, target_membership_id: membershipId, new_response: response, response_note: null,
     });
     if (responseError) setError(responseError.message);
-    else await load();
+    else { await load(); setFeedback('Rückmeldung wurde gespeichert.'); }
     setIsSubmitting(false);
   };
 
   const initializeAttendance = async (eventId: string) => {
     if (!supabase) return; setIsSubmitting(true); setError(null);
     const { error: attendanceError } = await supabase.rpc('initialize_event_attendance',{target_event_id:eventId});
-    setIsSubmitting(false); if(attendanceError)setError(attendanceError.message);else await load();
+    setIsSubmitting(false); if(attendanceError)setError(attendanceError.message);else { await load(); setFeedback('Zusagen wurden in die Anwesenheit übernommen.'); }
   };
 
   const setAttendance = async (eventId: string, membershipId: string, status: string) => {
     if (!supabase) return; setIsSubmitting(true); setError(null);
     const { error: attendanceError } = await supabase.rpc('set_event_attendance',{target_event_id:eventId,target_membership_id:membershipId,new_status:status,target_penalty_catalog_id:status==='unexcused'?(attendancePenalty[eventId]||null):null});
-    setIsSubmitting(false); if(attendanceError)setError(attendanceError.message);else await load();
+    setIsSubmitting(false); if(attendanceError)setError(attendanceError.message);else { await load(); setFeedback('Anwesenheit wurde gespeichert.'); }
   };
 
   if (isAuthLoading) return null;
   if (!session) return <Redirect href="/sign-in" />;
   if (!isWorkspaceLoading && !activeWorkspace) return <Redirect href="/setup" />;
 
-  return (
-    <ScrollView contentContainerStyle={styles.page}>
-      <View style={styles.shell}>
-        <Text style={styles.eyebrow}>TERMINE & VERFÜGBARKEIT</Text>
-        <Text style={styles.title}>Gemeinsam planen</Text>
-        <Text style={styles.subtitle}>Termine können mehrere Teams verbinden. Rückmeldungen zeigen sofort, ob Spieler und Trainer ausreichend verfügbar sind.</Text>
-        <ContextSwitcher />
+  return <ScrollView contentContainerStyle={styles.page}><View style={styles.shell}>
+    <Text style={styles.eyebrow}>KALENDER</Text>
+    <View style={styles.pageHeader}><View><Text style={styles.title}>Termine</Text><Text style={styles.subtitle}>Alle Termine und Rückmeldungen im gewählten Bereich.</Text></View>{canManage&&screen==='list'?<Pressable accessibilityRole="button" onPress={startCreate} style={styles.headerAction}><Text style={styles.headerActionText}>+ Termin erstellen</Text></Pressable>:null}</View>
+    <ContextSwitcher/>
+    <View style={styles.sectionNav}><Pressable accessibilityRole="button" style={[styles.sectionNavItem,styles.sectionNavActive]}><Text style={styles.sectionNavActiveText}>Termine</Text></Pressable><Pressable accessibilityRole="button" onPress={()=>router.push('/availability')} style={styles.sectionNavItem}><Text style={styles.sectionNavText}>Zeitfenster</Text></Pressable></View>
+    {feedback?<View style={styles.successBanner}><Text style={styles.successText}>✓ {feedback}</Text></View>:null}
+    {error&&screen!=='form'?<Text style={styles.error}>{error}</Text>:null}
 
-        {canManage ? (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>{editingId ? 'Termin bearbeiten' : 'Termin erstellen'}</Text>
-            <Text style={styles.label}>Titel</Text>
-            <TextInput onChangeText={setTitle} placeholder="Gemeinsames Training" style={styles.input} value={title} />
-            <Text style={styles.label}>Art</Text>
-            <View style={styles.choiceRow}>{Object.entries(eventTypeLabels).map(([value, label]) => (
-              <Pressable accessibilityRole="radio" accessibilityState={{ checked: eventType === value }} key={value} onPress={() => setEventType(value)} style={[styles.choice, eventType === value && styles.choiceActive]}>
-                <Text style={[styles.choiceText, eventType === value && styles.choiceTextActive]}>{label}</Text>
-              </Pressable>
-            ))}</View>
-            <View style={styles.columns}>
-              <View style={styles.column}><Text style={styles.label}>Beginn</Text><TextInput onChangeText={setStartsAt} placeholder="2026-08-11T17:30" style={styles.input} value={startsAt} /></View>
-              <View style={styles.column}><Text style={styles.label}>Ende</Text><TextInput onChangeText={setEndsAt} placeholder="2026-08-11T19:00" style={styles.input} value={endsAt} /></View>
-            </View>
-            <Text style={styles.helper}>Format: JJJJ-MM-TTTHH:MM</Text>
-            <View style={styles.columns}>
-              <View style={styles.column}><Text style={styles.label}>Zusagefrist</Text><TextInput onChangeText={setResponseDeadline} placeholder="2026-08-10T18:00" style={styles.input} value={responseDeadline} /></View>
-              <View style={styles.column}><Text style={styles.label}>Treffpunkt / Abfahrt</Text><TextInput onChangeText={setMeetingAt} placeholder="2026-08-11T16:45" style={styles.input} value={meetingAt} /></View>
-            </View>
-            <Text style={styles.label}>Treffpunkt</Text><TextInput onChangeText={setMeetingLocation} placeholder="Vereinsheim oder Parkplatz" style={styles.input} value={meetingLocation} />
-            <Text style={styles.label}>Teams</Text>
-            <View style={styles.choiceRow}>{activeWorkspace?.teams.filter((team) => manageableTeamIds.includes(team.id)).map((team) => {
-              const selected = selectedTeams.includes(team.id);
-              return <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: selected }} key={team.id} onPress={() => setSelectedTeams((current) => selected ? current.filter((id) => id !== team.id) : [...current, team.id])} style={[styles.choice, selected && styles.choiceActive]}><Text style={[styles.choiceText, selected && styles.choiceTextActive]}>{team.name}</Text></Pressable>;
-            })}</View>
-            <Text style={styles.label}>Ort</Text><TextInput onChangeText={setLocation} placeholder="Sportplatz" style={styles.input} value={location} />
-            <Text style={styles.label}>Hinweise</Text><TextInput multiline onChangeText={setNotes} placeholder="Optional" style={[styles.input, styles.notes]} value={notes} />
-            {!editingId ? <><Text style={styles.label}>Wiederholung</Text><View style={styles.choiceRow}>{recurrenceOptions.map(({ value,label }) => <Pressable accessibilityRole="radio" accessibilityState={{ checked: recurrence === value }} key={value} onPress={() => setRecurrence(value)} style={[styles.choice, recurrence === value && styles.choiceActive]}><Text style={[styles.choiceText, recurrence === value && styles.choiceTextActive]}>{label}</Text></Pressable>)}</View>{recurrence === 'weekly' ? <><Text style={styles.label}>Wiederholen bis</Text><TextInput onChangeText={setRecurrenceEndsOn} placeholder="2026-12-15" style={styles.input} value={recurrenceEndsOn} /></> : null}</> : null}
-            {error ? <Text style={styles.error}>{error}</Text> : null}
-            <View style={styles.formActions}>{editingId ? <Pressable accessibilityRole="button" onPress={() => setEditingId(null)} style={styles.secondaryButton}><Text style={styles.secondaryText}>Abbrechen</Text></Pressable> : null}<Pressable accessibilityRole="button" disabled={title.trim().length < 2 || selectedTeams.length === 0 || isSubmitting || (recurrence === 'weekly' && !recurrenceEndsOn)} onPress={editingId ? saveEvent : createEvent} style={[styles.primaryButton, styles.formPrimary, (title.trim().length < 2 || selectedTeams.length === 0) && styles.disabled]}>
-              {isSubmitting ? <ActivityIndicator color={colors.surface} /> : <Text style={styles.primaryText}>{editingId ? 'Änderungen speichern' : recurrence === 'weekly' ? 'Terminserie veröffentlichen' : 'Termin veröffentlichen'}</Text>}
-            </Pressable></View>
-          </View>
-        ) : null}
+    {screen==='list'?<View style={styles.card}>
+      <View style={styles.listHeader}><View><Text style={styles.cardTitle}>Anstehende Termine</Text><Text style={styles.helper}>Wähle einen Termin, um Rückmeldungen und Details zu sehen.</Text></View><Text style={styles.countBadge}>{events.length}</Text></View>
+      {isLoading?<ActivityIndicator color={colors.blue} style={styles.loader}/>:null}
+      {!isLoading&&events.length===0?<View style={styles.emptyState}><Text style={styles.emptyTitle}>Noch keine Termine</Text><Text style={styles.empty}>Erstelle den ersten gemeinsamen Termin für deine Teams.</Text></View>:null}
+      {events.map((event)=><Pressable accessibilityRole="button" key={event.id} onPress={()=>openEvent(event.id)} style={styles.eventListItem}>
+        <View style={styles.dateTile}><Text style={styles.dateMonth}>{new Date(event.startsAt).toLocaleDateString('de-DE',{month:'short'}).replace('.','').toUpperCase()}</Text><Text style={styles.dateNumber}>{new Date(event.startsAt).getDate()}</Text></View>
+        <View style={styles.listMain}><Text style={styles.eventType}>{eventTypeLabels[event.eventType]}</Text><Text style={styles.eventTitle}>{event.title}</Text><Text style={styles.eventMeta}>{formatDate(event.startsAt)}{event.location?` · ${event.location}`:''}</Text><Text style={styles.listTeams}>{event.teamIds.map((id)=>teamNameById.get(id)).join(' + ')}</Text></View>
+        <View style={styles.listStatus}><Text style={styles.yes}>{event.yes} dabei</Text><Text style={styles.open}>{Math.max(0,event.total-event.yes-event.maybe-event.no)} offen</Text><Text style={styles.detailLink}>Details →</Text></View>
+      </Pressable>)}
+    </View>:null}
 
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Planungsübersicht</Text>
-          <Text style={styles.helper}>Zusagen, mögliche Teilnahmen und offene Rückmeldungen aller ausgewählten Teams.</Text>
-          {isLoading ? <ActivityIndicator color={colors.blue} style={styles.loader} /> : null}
-          {!isLoading && events.length === 0 ? <Text style={styles.empty}>Noch keine Termine angelegt.</Text> : null}
-          {events.map((event) => (
-            <View key={event.id} style={styles.eventCard}>
-              <View style={styles.eventTop}><View><Text style={styles.eventType}>{eventTypeLabels[event.eventType]}</Text><Text style={styles.eventTitle}>{event.title}</Text><Text style={styles.eventMeta}>{formatDate(event.startsAt)}{event.location ? ` · ${event.location}` : ''}</Text></View><Text style={styles.teams}>{event.teamIds.map((id) => teamNameById.get(id)).join(' + ')}</Text></View>
-              {event.meetingAt || event.responseDeadline ? <View style={styles.details}>{event.meetingAt ? <Text style={styles.detailText}>Treffen {formatDate(event.meetingAt)}{event.meetingLocation ? ` · ${event.meetingLocation}` : ''}</Text> : null}{event.responseDeadline ? <Text style={styles.detailText}>Zusage bis {formatDate(event.responseDeadline)}</Text> : null}{event.recurrenceGroupId ? <Text style={styles.seriesTag}>Terminserie</Text> : null}</View> : null}
-              <View style={styles.metrics}><Text style={styles.yes}>✓ {event.yes} dabei</Text><Text style={styles.maybe}>? {event.maybe} vielleicht</Text><Text style={styles.no}>× {event.no} nicht dabei</Text><Text style={styles.open}>○ {Math.max(0, event.total - event.yes - event.maybe - event.no)} offen</Text></View>
-              {event.responders.length ? event.responders.map((responder) => { const deadlinePassed = Boolean(event.responseDeadline && new Date(event.responseDeadline) < new Date()); return <View key={responder.membershipId} style={styles.responderBlock}><Text style={styles.responderName}>Rückmeldung für {responder.name}</Text>{deadlinePassed ? <Text style={styles.deadlinePassed}>Zusagefrist abgelaufen</Text> : <View style={styles.responseRow}>{Object.entries(responseLabels).map(([value, label]) => (
-                <Pressable accessibilityRole="button" key={value} onPress={() => respond(event.id, responder.membershipId, value)} style={[styles.responseButton, responder.response === value && styles.responseActive]}><Text style={[styles.responseText, responder.response === value && styles.responseTextActive]}>{label}</Text></Pressable>
-              ))}</View>}</View>; }) : <Text style={styles.notTargeted}>Weder du noch ein betreutes Kind seid diesem Termin zugeordnet.</Text>}
-              {canManage && event.teamIds.every((id) => manageableTeamIds.includes(id)) ? <View style={styles.attendanceBox}><View style={styles.attendanceHeader}><View><Text style={styles.attendanceTitle}>Tatsächliche Anwesenheit</Text><Text style={styles.helper}>Zusagen können übernommen und danach einzeln korrigiert werden.</Text></View><Pressable accessibilityRole="button" onPress={()=>initializeAttendance(event.id)} style={styles.secondaryButton}><Text style={styles.secondaryText}>Zusagen übernehmen</Text></Pressable></View>
-                {penaltyCatalog.some((item)=>event.teamIds.includes(item.team_id)) ? <><Text style={styles.miniLabel}>Optionale Strafe bei „Unentschuldigt“</Text><View style={styles.choiceRow}><Pressable accessibilityRole="radio" accessibilityState={{checked:!attendancePenalty[event.id]}} onPress={()=>setAttendancePenalty((current)=>({...current,[event.id]:''}))} style={[styles.miniChoice,!attendancePenalty[event.id]&&styles.miniChoiceActive]}><Text style={styles.miniChoiceText}>Keine</Text></Pressable>{penaltyCatalog.filter((item)=>event.teamIds.includes(item.team_id)).map((item)=><Pressable accessibilityRole="radio" accessibilityState={{checked:attendancePenalty[event.id]===item.id}} key={item.id} onPress={()=>setAttendancePenalty((current)=>({...current,[event.id]:item.id}))} style={[styles.miniChoice,attendancePenalty[event.id]===item.id&&styles.miniChoiceActive]}><Text style={styles.miniChoiceText}>{item.title} · {(item.amount_cents/100).toFixed(2)} €</Text></Pressable>)}</View></>:null}
-                {event.participants.map((participant)=><View key={`attendance:${event.id}:${participant.membershipId}`} style={styles.attendanceRow}><View><Text style={styles.participantName}>{participant.name}</Text><Text style={styles.currentAttendance}>{participant.attendance ? attendanceLabels[participant.attendance] : 'Noch nicht erfasst'}</Text></View><View style={styles.attendanceActions}>{Object.entries(attendanceLabels).map(([value,label])=><Pressable accessibilityRole="button" key={value} onPress={()=>setAttendance(event.id,participant.membershipId,value)} style={[styles.attendanceButton,participant.attendance===value&&styles.attendanceActive]}><Text style={[styles.attendanceButtonText,participant.attendance===value&&styles.attendanceActiveText]}>{label}</Text></Pressable>)}</View></View>)}
-              </View>:null}
-              {canManage && event.teamIds.every((id) => manageableTeamIds.includes(id)) ? <View style={styles.manageActions}><Pressable accessibilityRole="button" onPress={() => beginEdit(event)} style={styles.secondaryButton}><Text style={styles.secondaryText}>Bearbeiten</Text></Pressable><Pressable accessibilityRole="button" onPress={() => cancelEvent(event.id)} style={styles.cancelButton}><Text style={styles.cancelText}>Absagen</Text></Pressable></View> : null}
-            </View>
-          ))}
-        </View>
-      </View>
-    </ScrollView>
-  );
+    {screen==='form'&&canManage?<View style={styles.card}>
+      <View style={styles.detailHeader}><Pressable accessibilityRole="button" onPress={()=>{setScreen(editingId?'detail':'list');setError(null)}} style={styles.backButton}><Text style={styles.backText}>← Zurück</Text></Pressable><Text style={styles.cardTitle}>{editingId?'Termin bearbeiten':'Neuer Termin'}</Text></View>
+      <Text style={styles.label}>Titel</Text><TextInput onChangeText={setTitle} placeholder="Gemeinsames Training" style={styles.input} value={title}/>
+      <Text style={styles.label}>Art</Text><View style={styles.choiceRow}>{Object.entries(eventTypeLabels).map(([value,label])=><Pressable accessibilityRole="radio" accessibilityState={{checked:eventType===value}} key={value} onPress={()=>setEventType(value)} style={[styles.choice,eventType===value&&styles.choiceActive]}><Text style={[styles.choiceText,eventType===value&&styles.choiceTextActive]}>{label}</Text></Pressable>)}</View>
+      <View style={styles.columns}><View style={styles.column}><Text style={styles.label}>Beginn</Text><TextInput onChangeText={setStartsAt} style={styles.input} value={startsAt}/></View><View style={styles.column}><Text style={styles.label}>Ende</Text><TextInput onChangeText={setEndsAt} style={styles.input} value={endsAt}/></View></View><Text style={styles.helper}>Format: JJJJ-MM-TTTHH:MM</Text>
+      <View style={styles.columns}><View style={styles.column}><Text style={styles.label}>Zusagefrist</Text><TextInput onChangeText={setResponseDeadline} placeholder="2026-08-10T18:00" style={styles.input} value={responseDeadline}/></View><View style={styles.column}><Text style={styles.label}>Treffpunkt / Abfahrt</Text><TextInput onChangeText={setMeetingAt} placeholder="2026-08-11T16:45" style={styles.input} value={meetingAt}/></View></View>
+      <Text style={styles.label}>Treffpunkt</Text><TextInput onChangeText={setMeetingLocation} placeholder="Vereinsheim oder Parkplatz" style={styles.input} value={meetingLocation}/>
+      <Text style={styles.label}>Teams</Text><View style={styles.choiceRow}>{activeWorkspace?.teams.filter((team)=>manageableTeamIds.includes(team.id)).map((team)=>{const selected=selectedTeams.includes(team.id);return <Pressable accessibilityRole="checkbox" accessibilityState={{checked:selected}} key={team.id} onPress={()=>setSelectedTeams((current)=>selected?current.filter((id)=>id!==team.id):[...current,team.id])} style={[styles.choice,selected&&styles.choiceActive]}><Text style={[styles.choiceText,selected&&styles.choiceTextActive]}>{team.name}</Text></Pressable>})}</View>
+      <Text style={styles.label}>Ort</Text><TextInput onChangeText={setLocation} placeholder="Sportplatz" style={styles.input} value={location}/><Text style={styles.label}>Hinweise</Text><TextInput multiline onChangeText={setNotes} placeholder="Optional" style={[styles.input,styles.notes]} value={notes}/>
+      {!editingId?<><Text style={styles.label}>Wiederholung</Text><View style={styles.choiceRow}>{recurrenceOptions.map(({value,label})=><Pressable accessibilityRole="radio" accessibilityState={{checked:recurrence===value}} key={value} onPress={()=>setRecurrence(value)} style={[styles.choice,recurrence===value&&styles.choiceActive]}><Text style={[styles.choiceText,recurrence===value&&styles.choiceTextActive]}>{label}</Text></Pressable>)}</View>{recurrence==='weekly'?<><Text style={styles.label}>Wiederholen bis</Text><TextInput onChangeText={setRecurrenceEndsOn} placeholder="2026-12-15" style={styles.input} value={recurrenceEndsOn}/></>:null}</>:null}
+      {error?<Text style={styles.error}>{error}</Text>:null}<View style={styles.formActions}><Pressable accessibilityRole="button" onPress={()=>{setScreen(editingId?'detail':'list');setError(null)}} style={styles.secondaryButton}><Text style={styles.secondaryText}>Abbrechen</Text></Pressable><Pressable accessibilityRole="button" disabled={title.trim().length<2||selectedTeams.length===0||isSubmitting||(recurrence==='weekly'&&!recurrenceEndsOn)} onPress={editingId?saveEvent:createEvent} style={[styles.primaryButton,styles.formPrimary,(title.trim().length<2||selectedTeams.length===0)&&styles.disabled]}>{isSubmitting?<ActivityIndicator color={colors.surface}/>:<Text style={styles.primaryText}>{editingId?'Speichern':recurrence==='weekly'?'Serie veröffentlichen':'Termin veröffentlichen'}</Text>}</Pressable></View>
+    </View>:null}
+
+    {screen==='detail'&&selectedEvent?<View style={styles.card}>
+      <View style={styles.detailHeader}><Pressable accessibilityRole="button" onPress={()=>{setScreen('list');setFeedback(null)}} style={styles.backButton}><Text style={styles.backText}>← Alle Termine</Text></Pressable>{canManage&&selectedEvent.teamIds.every((id)=>manageableTeamIds.includes(id))?<Pressable accessibilityRole="button" onPress={()=>beginEdit(selectedEvent)} style={styles.secondaryButton}><Text style={styles.secondaryText}>Bearbeiten</Text></Pressable>:null}</View>
+      <View style={styles.eventTop}><View><Text style={styles.eventType}>{eventTypeLabels[selectedEvent.eventType]}</Text><Text style={styles.detailTitle}>{selectedEvent.title}</Text><Text style={styles.eventMeta}>{formatDate(selectedEvent.startsAt)}{selectedEvent.location?` · ${selectedEvent.location}`:''}</Text></View><Text style={styles.teams}>{selectedEvent.teamIds.map((id)=>teamNameById.get(id)).join(' + ')}</Text></View>
+      {selectedEvent.meetingAt||selectedEvent.responseDeadline?<View style={styles.details}>{selectedEvent.meetingAt?<Text style={styles.detailText}>Treffen {formatDate(selectedEvent.meetingAt)}{selectedEvent.meetingLocation?` · ${selectedEvent.meetingLocation}`:''}</Text>:null}{selectedEvent.responseDeadline?<Text style={styles.detailText}>Zusage bis {formatDate(selectedEvent.responseDeadline)}</Text>:null}{selectedEvent.recurrenceGroupId?<Text style={styles.seriesTag}>Terminserie</Text>:null}</View>:null}
+      <View style={styles.metrics}><Text style={styles.yes}>✓ {selectedEvent.yes} dabei</Text><Text style={styles.maybe}>? {selectedEvent.maybe} vielleicht</Text><Text style={styles.no}>× {selectedEvent.no} nicht dabei</Text><Text style={styles.open}>○ {Math.max(0,selectedEvent.total-selectedEvent.yes-selectedEvent.maybe-selectedEvent.no)} offen</Text></View>
+      <Text style={styles.sectionTitle}>Meine Rückmeldung</Text>{selectedEvent.responders.length?selectedEvent.responders.map((responder)=>{const deadlinePassed=Boolean(selectedEvent.responseDeadline&&new Date(selectedEvent.responseDeadline)<new Date());return <View key={responder.membershipId} style={styles.responderBlock}><Text style={styles.responderName}>{responder.name}</Text>{deadlinePassed?<Text style={styles.deadlinePassed}>Zusagefrist abgelaufen</Text>:<View style={styles.responseRow}>{Object.entries(responseLabels).map(([value,label])=><Pressable accessibilityRole="button" key={value} onPress={()=>respond(selectedEvent.id,responder.membershipId,value)} style={[styles.responseButton,responder.response===value&&styles.responseActive]}><Text style={[styles.responseText,responder.response===value&&styles.responseTextActive]}>{label}</Text></Pressable>)}</View>}</View>}):<Text style={styles.notTargeted}>Du bist diesem Termin nicht zugeordnet.</Text>}
+      {canManage&&selectedEvent.teamIds.every((id)=>manageableTeamIds.includes(id))?<><Text style={styles.sectionTitle}>Anwesenheit</Text><View style={styles.attendanceBox}><View style={styles.attendanceHeader}><Text style={styles.helper}>Zusagen übernehmen oder einzeln korrigieren.</Text><Pressable accessibilityRole="button" onPress={()=>initializeAttendance(selectedEvent.id)} style={styles.secondaryButton}><Text style={styles.secondaryText}>Zusagen übernehmen</Text></Pressable></View>
+        {penaltyCatalog.some((item)=>selectedEvent.teamIds.includes(item.team_id))?<><Text style={styles.miniLabel}>Optionale Strafe bei „Unentschuldigt“</Text><View style={styles.choiceRow}><Pressable accessibilityRole="radio" accessibilityState={{checked:!attendancePenalty[selectedEvent.id]}} onPress={()=>setAttendancePenalty((current)=>({...current,[selectedEvent.id]:''}))} style={[styles.miniChoice,!attendancePenalty[selectedEvent.id]&&styles.miniChoiceActive]}><Text style={styles.miniChoiceText}>Keine</Text></Pressable>{penaltyCatalog.filter((item)=>selectedEvent.teamIds.includes(item.team_id)).map((item)=><Pressable accessibilityRole="radio" accessibilityState={{checked:attendancePenalty[selectedEvent.id]===item.id}} key={item.id} onPress={()=>setAttendancePenalty((current)=>({...current,[selectedEvent.id]:item.id}))} style={[styles.miniChoice,attendancePenalty[selectedEvent.id]===item.id&&styles.miniChoiceActive]}><Text style={styles.miniChoiceText}>{item.title} · {(item.amount_cents/100).toFixed(2)} €</Text></Pressable>)}</View></>:null}
+        {selectedEvent.participants.map((participant)=><View key={participant.membershipId} style={styles.attendanceRow}><View><Text style={styles.participantName}>{participant.name}</Text><Text style={styles.currentAttendance}>{participant.attendance?attendanceLabels[participant.attendance]:'Noch nicht erfasst'}</Text></View><View style={styles.attendanceActions}>{Object.entries(attendanceLabels).map(([value,label])=><Pressable accessibilityRole="button" key={value} onPress={()=>setAttendance(selectedEvent.id,participant.membershipId,value)} style={[styles.attendanceButton,participant.attendance===value&&styles.attendanceActive]}><Text style={[styles.attendanceButtonText,participant.attendance===value&&styles.attendanceActiveText]}>{label}</Text></Pressable>)}</View></View>)}
+      </View><View style={styles.dangerZone}><Pressable accessibilityRole="button" onPress={()=>cancelEvent(selectedEvent.id)} style={styles.cancelButton}><Text style={styles.cancelText}>Termin absagen</Text></Pressable></View></>:null}
+    </View>:null}
+  </View></ScrollView>;
 }
 
 const styles = StyleSheet.create({
@@ -317,4 +311,9 @@ const styles = StyleSheet.create({
   deadlinePassed: { color: '#b42318', fontSize: 11, fontWeight: '800', marginTop: 5 }, formActions: { alignItems: 'center', flexDirection: 'row', flexWrap: 'wrap', gap: 9, justifyContent: 'flex-end', marginTop: 18 }, formPrimary: { flex: 1, marginTop: 0 },
   secondaryButton: { borderColor: colors.border, borderRadius: 11, borderWidth: 1, padding: 13 }, secondaryText: { color: colors.ink, fontSize: 12, fontWeight: '800' }, manageActions: { flexDirection: 'row', gap: 8, justifyContent: 'flex-end', marginTop: 13 }, cancelButton: { borderColor: '#fda29b', borderRadius: 11, borderWidth: 1, padding: 13 }, cancelText: { color: '#b42318', fontSize: 12, fontWeight: '800' },
   attendanceBox:{backgroundColor:colors.canvas,borderRadius:13,marginTop:15,padding:14},attendanceHeader:{alignItems:'center',flexDirection:'row',flexWrap:'wrap',gap:10,justifyContent:'space-between'},attendanceTitle:{color:colors.ink,fontSize:14,fontWeight:'900'},miniLabel:{color:colors.muted,fontSize:11,fontWeight:'800',marginTop:12},miniChoice:{borderColor:colors.border,borderRadius:999,borderWidth:1,marginTop:7,paddingHorizontal:9,paddingVertical:6},miniChoiceActive:{backgroundColor:colors.blueSoft,borderColor:colors.blue},miniChoiceText:{color:colors.ink,fontSize:10,fontWeight:'800'},attendanceRow:{alignItems:'center',borderTopColor:colors.border,borderTopWidth:1,flexDirection:'row',flexWrap:'wrap',gap:10,justifyContent:'space-between',marginTop:12,paddingTop:12},participantName:{color:colors.ink,fontSize:13,fontWeight:'900'},currentAttendance:{color:colors.muted,fontSize:10,marginTop:3},attendanceActions:{flexDirection:'row',flexWrap:'wrap',gap:5},attendanceButton:{backgroundColor:colors.surface,borderColor:colors.border,borderRadius:8,borderWidth:1,paddingHorizontal:8,paddingVertical:6},attendanceActive:{backgroundColor:colors.ink,borderColor:colors.ink},attendanceButtonText:{color:colors.muted,fontSize:10,fontWeight:'800'},attendanceActiveText:{color:colors.surface},
+  pageHeader:{alignItems:'center',flexDirection:'row',flexWrap:'wrap',gap:16,justifyContent:'space-between'},headerAction:{backgroundColor:colors.ink,borderRadius:11,paddingHorizontal:16,paddingVertical:12},headerActionText:{color:colors.surface,fontSize:13,fontWeight:'900'},
+  sectionNav:{borderBottomColor:colors.border,borderBottomWidth:1,flexDirection:'row',gap:20,marginTop:18},sectionNavItem:{paddingHorizontal:2,paddingVertical:12},sectionNavActive:{borderBottomColor:colors.blue,borderBottomWidth:3},sectionNavText:{color:colors.muted,fontSize:13,fontWeight:'800'},sectionNavActiveText:{color:colors.blue,fontSize:13,fontWeight:'900'},
+  successBanner:{backgroundColor:'#dff7ea',borderRadius:12,marginTop:14,padding:12},successText:{color:colors.green,fontSize:12,fontWeight:'800'},listHeader:{alignItems:'center',flexDirection:'row',justifyContent:'space-between'},countBadge:{backgroundColor:colors.blueSoft,borderRadius:999,color:colors.blue,fontSize:12,fontWeight:'900',paddingHorizontal:10,paddingVertical:6},
+  emptyState:{alignItems:'center',paddingVertical:36},emptyTitle:{color:colors.ink,fontSize:16,fontWeight:'900'},eventListItem:{alignItems:'center',borderTopColor:colors.border,borderTopWidth:1,flexDirection:'row',flexWrap:'wrap',gap:14,marginTop:16,paddingTop:16},dateTile:{alignItems:'center',backgroundColor:colors.canvas,borderRadius:12,minWidth:54,padding:9},dateMonth:{color:colors.blue,fontSize:9,fontWeight:'900'},dateNumber:{color:colors.ink,fontSize:22,fontWeight:'900'},listMain:{flex:1,minWidth:210},listTeams:{color:colors.faint,fontSize:11,fontWeight:'700',marginTop:5},listStatus:{alignItems:'flex-end',gap:4},detailLink:{color:colors.blue,fontSize:11,fontWeight:'900',marginTop:3},
+  detailHeader:{alignItems:'center',flexDirection:'row',gap:12,justifyContent:'space-between',marginBottom:20},backButton:{paddingVertical:8},backText:{color:colors.blue,fontSize:12,fontWeight:'900'},detailTitle:{color:colors.ink,fontSize:28,fontWeight:'900',marginTop:4},sectionTitle:{color:colors.ink,fontSize:15,fontWeight:'900',marginTop:24},dangerZone:{borderTopColor:colors.border,borderTopWidth:1,marginTop:24,paddingTop:16},
 });
