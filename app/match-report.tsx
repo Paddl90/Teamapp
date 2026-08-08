@@ -28,8 +28,8 @@ export default function MatchReportScreen(){
  },[activeWorkspace?.id]); useEffect(()=>{void loadPlans()},[loadPlans]);
 
  const loadReport=useCallback(async()=>{if(!supabase||!selectedPlan)return;setIsLoading(true);setError(null);
-  const ids=selectedPlan.match_squad_entries.map(e=>e.membership_id); const {data:members}=ids.length?await supabase.from('memberships').select('id,profile_id').in('id',ids):{data:[]}; const profileIds=(members??[]).map(m=>m.profile_id); const {data:profiles}=profileIds.length?await supabase.from('profiles').select('id,display_name').in('id',profileIds):{data:[]};
-  setPlayers((members??[]).map(m=>({id:m.id,name:(profiles??[]).find(p=>p.id===m.profile_id)?.display_name??'Unbekannt',role:selectedPlan.match_squad_entries.find(e=>e.membership_id===m.id)?.squad_role??'bench'})));
+  const ids=selectedPlan.match_squad_entries.map(e=>e.membership_id); const {data:members}=ids.length?await supabase.from('memberships').select('id,profile_id,display_name').in('id',ids):{data:[]}; const profileIds=(members??[]).map(m=>m.profile_id).filter((id):id is string=>Boolean(id)); const {data:profiles}=profileIds.length?await supabase.from('profiles').select('id,display_name').in('id',profileIds):{data:[]};
+  setPlayers((members??[]).map(m=>({id:m.id,name:m.display_name??(profiles??[]).find(p=>p.id===m.profile_id)?.display_name??'Unbekannt',role:selectedPlan.match_squad_entries.find(e=>e.membership_id===m.id)?.squad_role??'bench'})));
   const [result,incidentResult]=await Promise.all([supabase.from('match_results').select('goals_for,goals_against,match_minutes,status').eq('match_plan_id',selectedPlan.id).maybeSingle(),supabase.from('match_incidents').select('id,incident_type,minute,membership_id,related_membership_id,note').eq('match_plan_id',selectedPlan.id).order('minute')]);
   if(result.data){setGoalsFor(String(result.data.goals_for));setGoalsAgainst(String(result.data.goals_against));setMatchMinutes(String(result.data.match_minutes));setResultStatus(result.data.status)}setIncidents((incidentResult.data??[]) as Incident[]);setIsLoading(false);
  },[selectedPlan?.id]); useEffect(()=>{void loadReport()},[loadReport]);

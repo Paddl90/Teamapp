@@ -38,10 +38,10 @@ export default function SquadScreen() {
   const load = useCallback(async () => {
     if (!supabase || !activeWorkspace) return;
     setIsLoading(true); setError(null);
-    const { data: membershipRows, error: membershipError } = await supabase.from('memberships').select('id, profile_id').eq('club_id', activeWorkspace.clubId).eq('status', 'active');
+    const { data: membershipRows, error: membershipError } = await supabase.from('memberships').select('id, profile_id, display_name').eq('club_id', activeWorkspace.clubId).eq('status', 'active');
     if (membershipError) { setError(membershipError.message); setIsLoading(false); return; }
     const membershipIds = (membershipRows ?? []).map((row) => row.id);
-    const profileIds = (membershipRows ?? []).map((row) => row.profile_id);
+    const profileIds = (membershipRows ?? []).map((row) => row.profile_id).filter((id): id is string => Boolean(id));
     const [profilesResult, assignmentsResult, positionsResult, targetsResult] = await Promise.all([
       profileIds.length ? supabase.from('profiles').select('id, display_name').in('id', profileIds) : Promise.resolve({ data: [] }),
       membershipIds.length ? supabase.from('team_memberships').select('id, membership_id, team_id, team_membership_roles(role)').in('membership_id', membershipIds) : Promise.resolve({ data: [] }),
@@ -54,7 +54,7 @@ export default function SquadScreen() {
       const memberPositions = (positionsResult.data ?? []).filter((row) => row.membership_id === member.id);
       return {
         membershipId: member.id,
-        name: (profilesResult.data ?? []).find((profile) => profile.id === member.profile_id)?.display_name ?? 'Unbenannt',
+        name: member.display_name ?? (profilesResult.data ?? []).find((profile) => profile.id === member.profile_id)?.display_name ?? 'Unbenannt',
         teamIds: [...new Set(playerAssignments.filter((row) => row.membership_id === member.id && activeWorkspace.teams.some((team) => team.id === row.team_id)).map((row) => row.team_id))],
         primary: memberPositions.find((row) => row.priority === 'primary')?.position_code ?? null,
         secondary: memberPositions.find((row) => row.priority === 'secondary')?.position_code ?? null,

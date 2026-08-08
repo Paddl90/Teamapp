@@ -58,10 +58,10 @@ export default function TrainingScreen() {
     setMyMembershipId(membershipResult.data?.id ?? null);
     const assignmentResult = await supabase.from('team_memberships').select('membership_id, team_membership_roles(role)').eq('team_id', teamId);
     const playerIds = (assignmentResult.data ?? []).filter((row) => ((row.team_membership_roles ?? []) as Array<{ role: string }>).some((role) => role.role === 'player')).map((row) => row.membership_id);
-    const membershipRows = playerIds.length ? await supabase.from('memberships').select('id,profile_id').in('id', playerIds) : { data: [], error: null };
-    const profileIds = (membershipRows.data ?? []).map((row) => row.profile_id);
+    const membershipRows = playerIds.length ? await supabase.from('memberships').select('id,profile_id,display_name').in('id', playerIds) : { data: [], error: null };
+    const profileIds = (membershipRows.data ?? []).map((row) => row.profile_id).filter((id): id is string => Boolean(id));
     const profileRows = profileIds.length ? await supabase.from('profiles').select('id,display_name').in('id', profileIds) : { data: [], error: null };
-    setPlayers((membershipRows.data ?? []).map((member) => ({ id: member.id, name: profileRows.data?.find((profile) => profile.id === member.profile_id)?.display_name ?? 'Unbekannt' })));
+    setPlayers((membershipRows.data ?? []).map((member) => ({ id: member.id, name: member.display_name ?? profileRows.data?.find((profile) => profile.id === member.profile_id)?.display_name ?? 'Unbekannt' })));
     const [entryResult, taskResult] = await Promise.all([
       supabase.from('individual_training_entries').select('id,membership_id,activity_type,performed_on,duration_minutes,distance_km,exertion,note,share_with_coaches').eq('season_id', activeWorkspace.seasonId).order('performed_on', { ascending: false }),
       supabase.from('training_tasks').select('id,membership_id,title,activity_type,instructions,due_on,repetitions,status').eq('team_id', teamId).order('due_on'),

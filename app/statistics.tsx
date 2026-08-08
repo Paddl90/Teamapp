@@ -92,14 +92,14 @@ export default function StatisticsScreen() {
     );
     const membershipIds = [...new Set(playerAssignments.map((row) => row.membership_id))];
     const membershipResult = membershipIds.length
-      ? await supabase.from('memberships').select('id, profile_id').in('id', membershipIds)
+      ? await supabase.from('memberships').select('id, profile_id, display_name').in('id', membershipIds)
       : { data: [], error: null };
     if (membershipResult.error) {
       setError(membershipResult.error.message);
       setIsLoading(false);
       return;
     }
-    const profileIds = (membershipResult.data ?? []).map((row) => row.profile_id);
+    const profileIds = (membershipResult.data ?? []).map((row) => row.profile_id).filter((id): id is string => Boolean(id));
     const profileResult = profileIds.length
       ? await supabase.from('profiles').select('id, display_name').in('id', profileIds)
       : { data: [], error: null };
@@ -110,7 +110,7 @@ export default function StatisticsScreen() {
     }
     const profileById = new Map((profileResult.data ?? []).map((row) => [row.id, row.display_name]));
     setViewerMembershipId((membershipResult.data ?? []).find((row) => row.profile_id === session?.user.id)?.id ?? null);
-    setNames(new Map((membershipResult.data ?? []).map((row) => [row.id, profileById.get(row.profile_id) ?? 'Unbekannt'])));
+    setNames(new Map((membershipResult.data ?? []).map((row) => [row.id, row.display_name ?? profileById.get(row.profile_id) ?? 'Unbekannt'])));
     setAssignments(playerAssignments);
     setEvents((eventResult.data ?? []) as EventRow[]);
     setMatchPlans((matchResult.data ?? []) as unknown as MatchPlanRow[]);
