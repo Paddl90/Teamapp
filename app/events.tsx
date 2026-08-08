@@ -1,5 +1,5 @@
 import { Redirect, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { ContextSwitcher } from '@/components/ContextSwitcher';
@@ -46,6 +46,7 @@ const formatDate = (value: string) => new Intl.DateTimeFormat('de-DE', {
 
 export default function EventsScreen() {
   const router = useRouter();
+  const scrollRef = useRef<ScrollView>(null);
   const { isLoading: isAuthLoading, session } = useAuth();
   const { activeWorkspace, isLoading: isWorkspaceLoading } = useWorkspace();
   const [events, setEvents] = useState<EventView[]>([]);
@@ -148,6 +149,7 @@ export default function EventsScreen() {
   useEffect(() => {
     if (activeWorkspace && selectedTeams.length === 0) setSelectedTeams(manageableTeamIds);
   }, [activeWorkspace?.id]);
+  useEffect(() => { scrollRef.current?.scrollTo({ y: 0, animated: false }); }, [screen, selectedEventId]);
 
   const teamNameById = useMemo(() => new Map(activeWorkspace?.teams.map((team) => [team.id, team.name]) ?? []), [activeWorkspace]);
   const selectedEvent = events.find((event) => event.id === selectedEventId) ?? null;
@@ -252,7 +254,7 @@ export default function EventsScreen() {
   if (!session) return <Redirect href="/sign-in" />;
   if (!isWorkspaceLoading && !activeWorkspace) return <Redirect href="/setup" />;
 
-  return <ScrollView contentContainerStyle={styles.page}><View style={styles.shell}>
+  return <ScrollView ref={scrollRef} contentContainerStyle={styles.page}><View style={styles.shell}>
     <Text style={styles.eyebrow}>KALENDER</Text>
     <View style={styles.pageHeader}><View><Text style={styles.title}>Termine</Text><Text style={styles.subtitle}>Alle Termine und Rückmeldungen im gewählten Bereich.</Text></View>{canManage&&screen==='list'?<Pressable accessibilityRole="button" onPress={startCreate} style={styles.headerAction}><Text style={styles.headerActionText}>+ Termin erstellen</Text></Pressable>:null}</View>
     <ContextSwitcher/>
