@@ -8,12 +8,6 @@ import { useWorkspace } from '@/features/workspace/WorkspaceProvider';
 import { supabase } from '@/lib/supabase';
 import { colors } from '@/theme/colors';
 
-const demoMetrics = [
-  { label: 'Spieler', value: '54', detail: 'auf 3 Teams verteilt' },
-  { label: 'Trainer', value: '6', detail: '4 heute verfügbar' },
-  { label: 'Offene Antworten', value: '9', detail: 'für Dienstag' },
-] as const;
-
 type DashboardData = {
   playerCount: number;
   coachCount: number;
@@ -26,12 +20,6 @@ type DashboardData = {
     open: number;
     total: number;
   };
-};
-
-type DashboardAction = {
-  description: string;
-  label: string;
-  path: '/accept-invite' | '/availability' | '/events' | '/funds' | '/matchday' | '/members' | '/notifications' | '/squad' | '/statistics' | '/training';
 };
 
 const initialData: DashboardData = { playerCount: 0, coachCount: 0, openResponses: 0, nextEvent: null };
@@ -104,38 +92,6 @@ export default function DashboardScreen() {
   const isPlayer = contextTeamRoles.includes('player');
   const isGuardian = Boolean(workspace?.clubRoles.includes('guardian') || contextTeamRoles.includes('guardian'));
   const roleLabels = [isClubManager && 'Admin', isCoach && !isClubManager && 'Trainer', isPlayer && 'Spieler', isGuardian && 'Elternteil'].filter(Boolean) as string[];
-  const navigationSections: Array<{ title: string; actions: DashboardAction[] }> = [
-    { title: 'Aktuell', actions: [
-      { label: 'Termine & Verfügbarkeit', description: 'Zu- und Absagen sowie Teilnehmerzahlen', path: '/events' },
-      { label: 'Benachrichtigungen', description: 'Neue Termine, Aufgaben und Nominierungen', path: '/notifications' },
-    ] },
-    { title: 'Mein Team', actions: [
-      { label: 'Spieltagsaufstellung', description: 'Kader, Formation und veröffentlichte Aufstellung', path: '/matchday' },
-      { label: 'Statistik', description: 'Einsätze, Tore, Minuten und Saisonwerte', path: '/statistics' },
-      { label: 'Individuelles Training', description: isCoach ? 'Aktivitäten und Vorgaben verwalten' : 'Aktivitäten und Vorgaben ansehen', path: '/training' },
-      { label: 'Kasse & Strafen', description: 'Strafen, Zahlungen und Mannschaftskasse', path: '/funds' },
-    ] },
-    ...(isCoach ? [{ title: 'Planung', actions: [
-      { label: 'Zeitfenster planen', description: 'Geeignete Termine anhand der Verfügbarkeit finden', path: '/availability' as const },
-      { label: 'Saison-Kader planen', description: 'Positionen und Kaderbreite über Teams hinweg', path: '/squad' as const },
-    ] }] : []),
-    { title: 'Organisation', actions: [
-      ...((isClubManager || isCoach || isGuardian) ? [{ label: isClubManager || isCoach ? 'Mitglieder verwalten' : 'Familie & Spieler', description: isClubManager || isCoach ? 'Profile, Teams, Rollen und Familien' : 'Betreute Spieler und Teams', path: '/members' as const }] : []),
-      { label: 'Einladung annehmen', description: 'Weiteren Verein, Bereich oder Team hinzufügen', path: '/accept-invite' },
-    ] },
-  ];
-  const metrics = isDemo
-    ? demoMetrics
-    : [
-        {
-          label: 'Teams',
-          value: String(activeTeam ? 1 : workspace?.teams.length ?? '–'),
-          detail: activeTeam?.name ?? (workspace?.teams.map((team) => team.name).join(' · ') || 'werden geladen'),
-        },
-        { label: 'Spieler', value: String(dashboardData.playerCount), detail: `${dashboardData.coachCount} Trainer im gewählten Bereich` },
-        { label: 'Offene Antworten', value: String(dashboardData.openResponses), detail: dashboardData.nextEvent ? 'für anstehende Termine' : 'noch keine anstehenden Termine' },
-      ];
-
   const attendanceRatio = dashboardData.nextEvent?.total ? dashboardData.nextEvent.yes / dashboardData.nextEvent.total : 0;
   const attendanceStatus = !dashboardData.nextEvent?.total ? 'Noch offen' : attendanceRatio >= 0.7 ? 'Gut besetzt' : attendanceRatio >= 0.4 ? 'Knapp besetzt' : 'Kritisch';
 
@@ -179,27 +135,7 @@ export default function DashboardScreen() {
           </View>
         ) : null}
 
-        <View style={styles.metrics}>
-          {metrics.map((metric) => (
-            <View key={metric.label} style={styles.metricCard}>
-              <Text style={styles.metricLabel}>{metric.label}</Text>
-              <Text style={styles.metricValue}>{metric.value}</Text>
-              <Text style={styles.metricDetail}>{metric.detail}</Text>
-            </View>
-          ))}
-        </View>
-
-        {!isDemo && workspace ? <View style={styles.navigation}>{navigationSections.filter((section) => section.actions.length).map((section) => (
-          <View key={section.title} style={styles.navigationSection}>
-            <Text style={styles.navigationTitle}>{section.title}</Text>
-            <View style={styles.actionGrid}>{section.actions.map((action) => (
-              <Pressable accessibilityRole="button" key={action.path} onPress={() => router.push(action.path)} style={styles.actionCard}>
-                <Text style={styles.actionTitle}>{action.label}</Text><Text style={styles.actionDescription}>{action.description}</Text><Text style={styles.actionLink}>Öffnen →</Text>
-              </Pressable>
-            ))}</View>
-          </View>
-        ))}</View> : null}
-
+        <Text style={styles.sectionTitle}>Als Nächstes</Text>
         {!isDemo && !dashboardData.nextEvent ? (
           <Pressable accessibilityRole="button" onPress={() => router.push('/events')} style={styles.emptyNextCard}>
             <Text style={styles.emptyNextTitle}>Noch kein anstehender Termin</Text><Text style={styles.emptyNextText}>Terminübersicht öffnen</Text>
@@ -220,6 +156,16 @@ export default function DashboardScreen() {
             </View>
           </Pressable>
         )}
+
+        <Text style={styles.sectionTitle}>Offene Aufgaben</Text>
+        <Pressable accessibilityRole="button" onPress={() => !isDemo && router.push('/events')} style={styles.taskCard}>
+          <View style={styles.taskCount}><Text style={styles.taskCountText}>{isDemo ? 9 : dashboardData.openResponses}</Text></View>
+          <View style={styles.taskContent}>
+            <Text style={styles.taskTitle}>Rückmeldungen zu Terminen</Text>
+            <Text style={styles.taskText}>{isDemo || dashboardData.openResponses > 0 ? 'Offene Zu- oder Absagen prüfen' : 'Aktuell ist nichts offen'}</Text>
+          </View>
+          <Text style={styles.taskLink}>Öffnen →</Text>
+        </Pressable>
       </View>
     </ScrollView>
   );
@@ -240,10 +186,6 @@ const styles = StyleSheet.create({
   leaveText: { color: colors.ink, fontSize: 13, fontWeight: '700' },
   roleBadges: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginTop: 12 },
   roleBadge: { backgroundColor: colors.blueSoft, borderRadius: 999, color: colors.blue, fontSize: 11, fontWeight: '900', paddingHorizontal: 10, paddingVertical: 6 },
-  navigation: { marginTop: 12 }, navigationSection: { marginTop: 20 }, navigationTitle: { color: colors.ink, fontSize: 16, fontWeight: '900' },
-  actionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 10 },
-  actionCard: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 15, borderWidth: 1, flexBasis: 230, flexGrow: 1, minHeight: 126, padding: 16 },
-  actionTitle: { color: colors.ink, fontSize: 15, fontWeight: '900' }, actionDescription: { color: colors.muted, fontSize: 12, lineHeight: 18, marginTop: 6 }, actionLink: { color: colors.blue, fontSize: 12, fontWeight: '900', marginTop: 10 },
   demoBanner: {
     backgroundColor: colors.blueSoft,
     borderRadius: 12,
@@ -263,19 +205,7 @@ const styles = StyleSheet.create({
     marginTop: 42,
   },
   intro: { color: colors.muted, fontSize: 17, marginTop: 8 },
-  metrics: { flexDirection: 'row', flexWrap: 'wrap', gap: 14, marginTop: 28 },
-  metricCard: {
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderRadius: 18,
-    borderWidth: 1,
-    flexBasis: 220,
-    flexGrow: 1,
-    padding: 20,
-  },
-  metricLabel: { color: colors.muted, fontSize: 13, fontWeight: '700' },
-  metricValue: { color: colors.ink, fontSize: 34, fontWeight: '900', marginTop: 10 },
-  metricDetail: { color: colors.faint, fontSize: 13, marginTop: 5 },
+  sectionTitle: { color: colors.ink, fontSize: 16, fontWeight: '900', marginTop: 30 },
   nextCard: {
     alignItems: 'center',
     backgroundColor: colors.ink,
@@ -305,4 +235,8 @@ const styles = StyleSheet.create({
   statusCritical: { backgroundColor: '#fef3f2' }, statusCriticalText: { color: '#b42318' },
   emptyNextCard: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 18, borderStyle: 'dashed', borderWidth: 1, marginTop: 16, padding: 22 },
   emptyNextTitle: { color: colors.ink, fontSize: 17, fontWeight: '900' }, emptyNextText: { color: colors.blue, fontSize: 13, fontWeight: '800', marginTop: 5 },
+  taskCard: { alignItems: 'center', backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 16, borderWidth: 1, flexDirection: 'row', gap: 14, marginTop: 12, padding: 16 },
+  taskCount: { alignItems: 'center', backgroundColor: colors.blueSoft, borderRadius: 12, height: 42, justifyContent: 'center', width: 42 },
+  taskCountText: { color: colors.blue, fontSize: 17, fontWeight: '900' },
+  taskContent: { flex: 1 }, taskTitle: { color: colors.ink, fontSize: 14, fontWeight: '900' }, taskText: { color: colors.muted, fontSize: 12, marginTop: 3 }, taskLink: { color: colors.blue, fontSize: 12, fontWeight: '900' },
 });
