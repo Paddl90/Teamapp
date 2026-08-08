@@ -32,7 +32,7 @@ type EventView = {
   maybe: number;
   no: number;
   total: number;
-  responders: Array<{ membershipId: string; name: string; response: string | null }>;
+  responders: Array<{ membershipId: string; name: string; response: string | null; isCurrentUser: boolean }>;
   participants: Array<{ membershipId: string; name: string; attendance: string | null }>;
 };
 type PenaltyItem = { id: string; team_id: string; title: string; amount_cents: number };
@@ -89,8 +89,8 @@ export default function EventsScreen() {
     const managedProfileIds = (managedMembers ?? []).map((row) => row.profile_id);
     const { data: managedProfiles } = managedProfileIds.length ? await supabase.from('profiles').select('id,display_name').in('id', managedProfileIds) : { data: [] };
     const identities = [
-      ...(membership?.id ? [{ membershipId: membership.id, name: 'Ich' }] : []),
-      ...(managedMembers ?? []).map((member) => ({ membershipId: member.id, name: (managedProfiles ?? []).find((profile) => profile.id === member.profile_id)?.display_name ?? 'Kind' })),
+      ...(membership?.id ? [{ membershipId: membership.id, name: 'Ich', isCurrentUser: true }] : []),
+      ...(managedMembers ?? []).map((member) => ({ membershipId: member.id, name: (managedProfiles ?? []).find((profile) => profile.id === member.profile_id)?.display_name ?? 'Kind', isCurrentUser: false })),
     ];
     const { data: eventRows, error: eventError } = await supabase
       .from('events')
@@ -272,7 +272,7 @@ export default function EventsScreen() {
           <View style={styles.listMain}><Text style={styles.eventType}>{eventTypeLabels[event.eventType]}</Text><Text style={styles.eventTitle}>{event.title}</Text><Text style={styles.eventMeta}>{formatDate(event.startsAt)}{event.location?` · ${event.location}`:''}</Text><Text style={styles.listTeams}>{event.teamIds.map((id)=>teamNameById.get(id)).join(' + ')}</Text></View>
           <View style={styles.listStatus}><Text style={styles.yes}>{event.yes} dabei</Text><Text style={styles.open}>{Math.max(0,event.total-event.yes-event.maybe-event.no)} offen</Text><Text style={styles.detailLink}>Details →</Text></View>
         </Pressable>
-        <View style={styles.inlineResponseArea}>{event.responders.map((responder)=><View key={responder.membershipId} style={styles.inlineResponder}><Text style={styles.inlineResponderName}>{responder.name}</Text>{deadlinePassed?<Text style={styles.inlineDeadline}>Frist abgelaufen</Text>:<View style={styles.inlineSymbols}>{Object.entries(responseLabels).map(([value,label])=><Pressable accessibilityLabel={`${responder.name}: ${label}`} accessibilityRole="button" accessibilityState={{selected:responder.response===value}} disabled={isSubmitting} key={value} onPress={()=>respond(event.id,responder.membershipId,value)} style={[styles.symbolButton,responder.response===value&&styles.symbolActive]}><Text style={[styles.symbolText,responder.response===value&&styles.symbolTextActive]}>{value==='yes'?'✓':value==='maybe'?'?':'×'}</Text></Pressable>)}</View>}</View>)}</View>
+        {event.responders.filter((responder)=>responder.isCurrentUser).map((responder)=><View key={responder.membershipId} style={styles.inlineResponseArea}><View style={styles.inlineResponder}><Text style={styles.inlineResponderName}>Meine Rückmeldung</Text>{deadlinePassed?<Text style={styles.inlineDeadline}>Frist abgelaufen</Text>:<View style={styles.inlineSymbols}>{Object.entries(responseLabels).map(([value,label])=><Pressable accessibilityLabel={label} accessibilityRole="button" accessibilityState={{selected:responder.response===value}} disabled={isSubmitting} key={value} onPress={()=>respond(event.id,responder.membershipId,value)} style={[styles.symbolButton,responder.response===value&&styles.symbolActive]}><Text style={[styles.symbolText,responder.response===value&&styles.symbolTextActive]}>{value==='yes'?'✓':value==='maybe'?'?':'×'}</Text></Pressable>)}</View>}</View></View>)}
       </View>})}
     </View>:null}
 
