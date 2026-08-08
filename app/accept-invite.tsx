@@ -22,9 +22,12 @@ export default function AcceptInviteScreen() {
     if (!supabase) return;
     setIsSubmitting(true);
     setError(null);
-    const { error: acceptError } = await supabase.rpc('accept_member_invitation', {
-      invitation_code: code.trim().toUpperCase(),
-    });
+    const normalizedCode=code.trim().toUpperCase();
+    const claimResult=await supabase.rpc('accept_player_claim',{claim_code:normalizedCode});
+    const invitationResult=claimResult.error?.message.includes('player claim not found')
+      ? await supabase.rpc('accept_member_invitation',{invitation_code:normalizedCode})
+      : {error:null};
+    const acceptError=claimResult.error?.message.includes('player claim not found') ? invitationResult.error : claimResult.error;
     setIsSubmitting(false);
 
     if (acceptError) {
@@ -39,9 +42,9 @@ export default function AcceptInviteScreen() {
   return (
     <View style={styles.page}>
       <View style={styles.card}>
-        <Text style={styles.eyebrow}>EINLADUNG</Text>
-        <Text style={styles.title}>Weiteres Team hinzufügen</Text>
-        <Text style={styles.subtitle}>Gib den zehnstelligen Code ein. Die vorgesehenen Vereine, Teams und Rollen werden deinem bestehenden Account hinzugefügt.</Text>
+        <Text style={styles.eyebrow}>VERBINDUNG</Text>
+        <Text style={styles.title}>Profil oder Team verbinden</Text>
+        <Text style={styles.subtitle}>Gib den zehnstelligen Code ein. Damit kannst du ein vorbereitetes Spielerprofil übernehmen oder einem weiteren Team beitreten.</Text>
         <TextInput
           autoCapitalize="characters"
           maxLength={10}
@@ -52,7 +55,7 @@ export default function AcceptInviteScreen() {
         />
         {error ? <Text style={styles.error}>{error}</Text> : null}
         <Pressable accessibilityRole="button" disabled={code.trim().length !== 10 || isSubmitting} onPress={accept} style={[styles.button, code.trim().length !== 10 && styles.disabled]}>
-          {isSubmitting ? <ActivityIndicator color={colors.surface} /> : <Text style={styles.buttonText}>Einladung annehmen</Text>}
+          {isSubmitting ? <ActivityIndicator color={colors.surface} /> : <Text style={styles.buttonText}>Code verwenden</Text>}
         </Pressable>
       </View>
     </View>

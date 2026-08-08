@@ -31,6 +31,8 @@ type MemberView = {
   name: string;
   birthDate: string;
   status: string;
+  connected: boolean;
+  claimCode: string | null;
   clubRoles: string[];
   teams: Array<{ id: string; name: string; roles: string[] }>;
 };
@@ -47,8 +49,12 @@ export default function MembersScreen() {
   const [guardianId, setGuardianId] = useState('');
   const [childId, setChildId] = useState('');
   const [email, setEmail] = useState('');
+  const [playerName, setPlayerName] = useState('');
+  const [playerBirthDate, setPlayerBirthDate] = useState('');
+  const [playerTeams, setPlayerTeams] = useState<string[]>([]);
   const [assignments, setAssignments] = useState<Record<string, string[]>>({});
   const [createdCode, setCreatedCode] = useState<string | null>(null);
+  const [playerCode, setPlayerCode] = useState<string | null>(null);
   const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [editBirthDate, setEditBirthDate] = useState('');
@@ -69,7 +75,7 @@ export default function MembersScreen() {
 
     const { data: membershipRows, error: membershipError } = await client
       .from('memberships')
-      .select('id, profile_id, status')
+      .select('id, profile_id, display_name, birth_date, status')
       .eq('club_id', activeWorkspace.clubId)
       .order('created_at');
 
@@ -80,8 +86,8 @@ export default function MembersScreen() {
     }
 
     const membershipIds = (membershipRows ?? []).map((row) => row.id);
-    const profileIds = (membershipRows ?? []).map((row) => row.profile_id);
-    const [{ data: profileRows }, { data: clubRoleRows }, { data: teamMembershipRows }, invitationResult, guardianResult] = await Promise.all([
+    const profileIds = (membershipRows ?? []).map((row) => row.profile_id).filter((id): id is string => Boolean(id));
+    const [{ data: profileRows }, { data: clubRoleRows }, { data: teamMembershipRows }, invitationResult, guardianResult, claimResult] = await Promise.all([
       profileIds.length
         ? client.from('profiles').select('id, display_name, birth_date').in('id', profileIds)
         : Promise.resolve({ data: [] }),
@@ -103,6 +109,9 @@ export default function MembersScreen() {
             .limit(20)
         : Promise.resolve({ data: [] }),
       client.from('guardian_child_links').select('id, guardian_membership_id, child_membership_id').eq('club_id', activeWorkspace.clubId),
+      canManage && membershipIds.length
+        ? client.from('player_claims').select('membership_id,code,status').in('membership_id',membershipIds).eq('status','pending')
+        : Promise.resolve({ data: [] }),
     ]);
 
     const teamById = new Map(activeWorkspace.teams.map((team) => [team.id, team.name]));
@@ -111,9 +120,11 @@ export default function MembersScreen() {
         const profile = (profileRows ?? []).find((row) => row.id === membership.profile_id);
         return {
         id: membership.id,
-        name: profile?.display_name || 'Unbenanntes Mitglied',
-        birthDate: profile?.birth_date ?? '',
+        name: membership.display_name || profile?.display_name || 'Unbenanntes Mitglied',
+        birthDate: membership.birth_date ?? profile?.birth_date ?? '',
         status: membership.status,
+        connected: Boolean(membership.profile_id),
+        claimCode: (claimResult.data ?? []).find((row) => row.membership_id === membership.id)?.code ?? null,
         clubRoles: (clubRoleRows ?? []).filter((row) => row.membership_id === membership.id).map((row) => row.role),
         teams: (teamMembershipRows ?? [])
           .filter((row) => row.membership_id === membership.id && teamById.has(row.team_id))
@@ -171,6 +182,30 @@ export default function MembersScreen() {
     setEmail('');
     setAssignments({});
     await load();
+  };
+
+  const createPlayer = async () => {
+    if (!supabase || !activeWorkspace || playerName.trim().length < 2 || playerTeams.length < 1) return;
+    setIsSubmitting(true); setError(null); setPlayerCode(null);
+    const { data, error: createError } = await supabase.rpc('create_unclaimed_player', {
+      target_club_id: activeWorkspace.clubId,
+      player_name: playerName.trim(),
+      player_birth_date: playerBirthDate || null,
+      target_team_ids: playerTeams,
+    });
+    setIsSubmitting(false);
+    if (createError) { setError(createError.message); return; }
+    setPlayerCode((data as { code?: string } | null)?.code ?? null);
+    setPlayerName(''); setPlayerBirthDate(''); setPlayerTeams([]); await load();
+  };
+
+  const renewClaimCode = async (membershipId: string) => {
+    if (!supabase) return;
+    setIsSubmitting(true); setError(null);
+    const { data, error: claimError } = await supabase.rpc('create_player_claim', { target_membership_id: membershipId });
+    setIsSubmitting(false);
+    if (claimError) { setError(claimError.message); return; }
+    setPlayerCode(data as string); await load();
   };
 
   const beginEdit = (member: MemberView) => {
@@ -255,6 +290,23 @@ export default function MembersScreen() {
 
         {canManage ? (
           <View style={styles.card}>
+            <Text style={styles.cardTitle}>Spieler ohne Account anlegen</Text>
+            <Text style={styles.helper}>Der Spieler kann sofort in Terminen, Kader, Statistik und Mannschaftskasse verwendet werden. Mit dem Code verbindet er später seinen eigenen Account.</Text>
+            <Text style={styles.label}>Name</Text>
+            <TextInput onChangeText={setPlayerName} placeholder="Vor- und Nachname" style={styles.input} value={playerName} />
+            <Text style={styles.label}>Geburtsdatum (optional)</Text>
+            <TextInput autoCapitalize="none" onChangeText={setPlayerBirthDate} placeholder="2010-05-20" style={styles.input} value={playerBirthDate} />
+            <Text style={styles.label}>Teams</Text>
+            <View style={styles.roleRow}>{activeWorkspace?.teams.map((team) => { const selected=playerTeams.includes(team.id); return <Pressable accessibilityRole="checkbox" accessibilityState={{checked:selected}} key={`new:${team.id}`} onPress={()=>setPlayerTeams((current)=>selected?current.filter((id)=>id!==team.id):[...current,team.id])} style={[styles.roleButton,selected&&styles.roleButtonActive]}><Text style={[styles.roleText,selected&&styles.roleTextActive]}>{team.name}</Text></Pressable>; })}</View>
+            {playerCode ? <View style={styles.success}><Text style={styles.successTitle}>Spieler angelegt</Text><Text style={styles.code}>{playerCode}</Text><Text style={styles.helper}>Diesen Verbindungscode später an den Spieler weitergeben.</Text></View> : null}
+            <Pressable accessibilityRole="button" disabled={playerName.trim().length<2||playerTeams.length<1||isSubmitting} onPress={createPlayer} style={[styles.primaryButton,(playerName.trim().length<2||playerTeams.length<1)&&styles.disabled]}>
+              {isSubmitting?<ActivityIndicator color={colors.surface}/>:<Text style={styles.primaryText}>Spieler anlegen</Text>}
+            </Pressable>
+          </View>
+        ) : null}
+
+        {canManage ? (
+          <View style={styles.card}>
             <Text style={styles.cardTitle}>Mitglied einladen</Text>
             <Text style={styles.helper}>Die eingeladene Person registriert sich mit dieser E-Mail-Adresse und gibt anschließend den Code ein.</Text>
             <Text style={styles.label}>E-Mail-Adresse</Text>
@@ -330,12 +382,16 @@ export default function MembersScreen() {
             <View key={member.id} style={styles.memberRow}>
               <View style={styles.memberMain}>
                 <Text style={styles.memberName}>{member.name}</Text>
+                <Text style={[styles.memberMeta, member.connected ? styles.connected : styles.unconnected]}>{member.connected ? 'Account verbunden' : 'Noch ohne Account'}</Text>
                 {member.birthDate ? <Text style={styles.memberMeta}>Geboren am {member.birthDate}</Text> : null}
                 {member.clubRoles.length ? <Text style={styles.memberMeta}>{member.clubRoles.map((role) => roleLabels[role] ?? role).join(' · ')}</Text> : null}
                 {canManage ? (
-                  <Pressable accessibilityRole="button" onPress={() => beginEdit(member)} style={styles.editButton}>
-                    <Text style={styles.editButtonText}>Profil & Rollen bearbeiten</Text>
-                  </Pressable>
+                  <>
+                    <Pressable accessibilityRole="button" onPress={() => beginEdit(member)} style={styles.editButton}>
+                      <Text style={styles.editButtonText}>Profil & Rollen bearbeiten</Text>
+                    </Pressable>
+                    {!member.connected ? <View style={styles.claimRow}><Text style={styles.smallCode}>{member.claimCode ?? 'Kein Code'}</Text><Pressable accessibilityRole="button" disabled={isSubmitting} onPress={()=>renewClaimCode(member.id)} style={styles.editButton}><Text style={styles.editButtonText}>Neuen Verbindungscode erzeugen</Text></Pressable></View> : null}
+                  </>
                 ) : null}
               </View>
               <View style={styles.memberTeams}>
@@ -483,6 +539,9 @@ const styles = StyleSheet.create({
   memberMain: { minWidth: 180 },
   memberName: { color: colors.ink, fontSize: 15, fontWeight: '800' },
   memberMeta: { color: colors.muted, fontSize: 12, marginTop: 3 },
+  connected: { color: colors.green, fontWeight: '800' },
+  unconnected: { color: colors.orange, fontWeight: '800' },
+  claimRow: { gap: 4, marginTop: 8 },
   editButton: { alignSelf: 'flex-start', marginTop: 8, paddingVertical: 4 },
   editButtonText: { color: colors.blue, fontSize: 12, fontWeight: '800' },
   memberTeams: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },

@@ -65,8 +65,8 @@ export default function MatchdayScreen() {
     setIsLoading(true); setError(null); setSavedStatus(null);
     const { data: assignmentRows } = await supabase.from('team_memberships').select('membership_id, team_membership_roles(role)').eq('team_id', selectedTeamId);
     const playerIds = (assignmentRows ?? []).filter((row) => ((row.team_membership_roles ?? []) as Array<{ role: string }>).some((role) => role.role === 'player')).map((row) => row.membership_id);
-    const { data: memberships } = playerIds.length ? await supabase.from('memberships').select('id, profile_id').in('id', playerIds) : { data: [] };
-    const profileIds = (memberships ?? []).map((row) => row.profile_id);
+    const { data: memberships } = playerIds.length ? await supabase.from('memberships').select('id, profile_id, display_name').in('id', playerIds) : { data: [] };
+    const profileIds = (memberships ?? []).map((row) => row.profile_id).filter((id): id is string => Boolean(id));
     const [profilesResult, positionsResult, responsesResult, planResult] = await Promise.all([
       profileIds.length ? supabase.from('profiles').select('id, display_name').in('id', profileIds) : Promise.resolve({ data: [] }),
       playerIds.length ? supabase.from('member_positions').select('membership_id, position_code, priority').in('membership_id', playerIds) : Promise.resolve({ data: [] }),
@@ -75,7 +75,7 @@ export default function MatchdayScreen() {
     ]);
     setCandidates((memberships ?? []).map((member) => {
       const memberPositions = (positionsResult.data ?? []).filter((row) => row.membership_id === member.id);
-      return { membershipId: member.id, name: (profilesResult.data ?? []).find((profile) => profile.id === member.profile_id)?.display_name ?? 'Unbenannt', response: (responsesResult.data ?? []).find((row) => row.membership_id === member.id)?.response ?? null, primary: memberPositions.find((row) => row.priority === 'primary')?.position_code ?? null, secondary: memberPositions.find((row) => row.priority === 'secondary')?.position_code ?? null };
+      return { membershipId: member.id, name: member.display_name ?? (profilesResult.data ?? []).find((profile) => profile.id === member.profile_id)?.display_name ?? 'Unbenannt', response: (responsesResult.data ?? []).find((row) => row.membership_id === member.id)?.response ?? null, primary: memberPositions.find((row) => row.priority === 'primary')?.position_code ?? null, secondary: memberPositions.find((row) => row.priority === 'secondary')?.position_code ?? null };
     }));
     if (planResult.data) {
       setOpponent(planResult.data.opponent); setVenueSide(planResult.data.venue_side); setFormation(planResult.data.formation); setSavedStatus(planResult.data.status);

@@ -12,6 +12,7 @@ source "$environment_file"
 set +a
 
 supabase start --workdir "$runtime_dir"
+supabase migration up --local --workdir "$runtime_dir"
 
 publishable_key="$(
   supabase status --workdir "$runtime_dir" -o env |

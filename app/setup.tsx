@@ -119,7 +119,7 @@ export default function SetupScreen() {
           </Text>
 
           <Pressable accessibilityRole="button" onPress={() => router.push('/accept-invite')} style={styles.inviteLink}>
-            <Text style={styles.inviteLinkText}>Du wurdest eingeladen? Einladungscode eingeben</Text>
+            <Text style={styles.inviteLinkText}>Du hast einen Einladungs- oder Spielerprofil-Code? Code eingeben</Text>
           </Pressable>
 
           <Section number="1" title="Verein">

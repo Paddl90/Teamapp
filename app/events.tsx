@@ -85,12 +85,12 @@ export default function EventsScreen() {
     const { data: membership } = await supabase.from('memberships').select('id').eq('club_id', activeWorkspace.clubId).eq('profile_id', session.user.id).maybeSingle();
     const { data: guardianRows } = membership?.id ? await supabase.from('guardian_child_links').select('child_membership_id').eq('guardian_membership_id', membership.id) : { data: [] };
     const managedIds = (guardianRows ?? []).map((row) => row.child_membership_id);
-    const { data: managedMembers } = managedIds.length ? await supabase.from('memberships').select('id,profile_id').in('id', managedIds) : { data: [] };
-    const managedProfileIds = (managedMembers ?? []).map((row) => row.profile_id);
+    const { data: managedMembers } = managedIds.length ? await supabase.from('memberships').select('id,profile_id,display_name').in('id', managedIds) : { data: [] };
+    const managedProfileIds = (managedMembers ?? []).map((row) => row.profile_id).filter((id): id is string => Boolean(id));
     const { data: managedProfiles } = managedProfileIds.length ? await supabase.from('profiles').select('id,display_name').in('id', managedProfileIds) : { data: [] };
     const identities = [
       ...(membership?.id ? [{ membershipId: membership.id, name: 'Ich', isCurrentUser: true }] : []),
-      ...(managedMembers ?? []).map((member) => ({ membershipId: member.id, name: (managedProfiles ?? []).find((profile) => profile.id === member.profile_id)?.display_name ?? 'Kind', isCurrentUser: false })),
+      ...(managedMembers ?? []).map((member) => ({ membershipId: member.id, name: member.display_name ?? (managedProfiles ?? []).find((profile) => profile.id === member.profile_id)?.display_name ?? 'Kind', isCurrentUser: false })),
     ];
     const { data: eventRows, error: eventError } = await supabase
       .from('events')
@@ -110,10 +110,10 @@ export default function EventsScreen() {
       ? await supabase.from('team_memberships').select('team_id, membership_id').in('team_id', teamIds)
       : { data: [] };
     const participantMembershipIds = [...new Set((participantRows ?? []).map((row) => row.membership_id))];
-    const { data: participantMembers } = participantMembershipIds.length ? await supabase.from('memberships').select('id,profile_id').in('id',participantMembershipIds) : { data: [] };
-    const participantProfileIds = (participantMembers ?? []).map((row) => row.profile_id);
+    const { data: participantMembers } = participantMembershipIds.length ? await supabase.from('memberships').select('id,profile_id,display_name').in('id',participantMembershipIds) : { data: [] };
+    const participantProfileIds = (participantMembers ?? []).map((row) => row.profile_id).filter((id): id is string => Boolean(id));
     const { data: participantProfiles } = participantProfileIds.length ? await supabase.from('profiles').select('id,display_name').in('id',participantProfileIds) : { data: [] };
-    const participantName = (membershipId: string) => { const member=(participantMembers ?? []).find((row)=>row.id===membershipId); return (participantProfiles ?? []).find((profile)=>profile.id===member?.profile_id)?.display_name ?? 'Unbekannt'; };
+    const participantName = (membershipId: string) => { const member=(participantMembers ?? []).find((row)=>row.id===membershipId); return member?.display_name ?? (participantProfiles ?? []).find((profile)=>profile.id===member?.profile_id)?.display_name ?? 'Unbekannt'; };
     const { data: catalogRows } = await supabase.from('penalty_catalog').select('id,team_id,title,amount_cents').in('team_id',activeWorkspace.teams.map((team)=>team.id)).eq('active',true).order('title');
     setPenaltyCatalog((catalogRows ?? []) as PenaltyItem[]);
 
