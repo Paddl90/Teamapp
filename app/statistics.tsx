@@ -3,10 +3,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { ContextSwitcher } from '@/components/ContextSwitcher';
+import { TeamNavigation } from '@/components/TeamNavigation';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useWorkspace } from '@/features/workspace/WorkspaceProvider';
 import { supabase } from '@/lib/supabase';
-import { colors } from '@/theme/colors';
+import { useAppTheme } from '@/theme/ThemeProvider';
 
 type TeamAssignment = { team_id: string; membership_id: string; team_membership_roles: Array<{ role: string }> };
 type EventRow = {
@@ -49,6 +50,7 @@ const percent = (value: number, total: number) => total > 0 ? Math.round((value 
 const resultFor = (plan: MatchPlanRow) => Array.isArray(plan.match_results) ? plan.match_results[0] : plan.match_results;
 
 export default function StatisticsScreen() {
+  const {colors}=useAppTheme(); const styles=useMemo(()=>createStyles(colors),[colors]);
   const { isLoading: isAuthLoading, session } = useAuth();
   const { activeWorkspace, isLoading: isWorkspaceLoading } = useWorkspace();
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
@@ -199,7 +201,8 @@ export default function StatisticsScreen() {
         <Text style={styles.eyebrow}>STATISTIK</Text>
         <Text style={styles.title}>Beteiligung & Einsätze</Text>
         <Text style={styles.subtitle}>Saisonwerte für den gesamten Jahrgang oder einzelne Teams. Mehrfach zugeordnete Spieler werden in der Gesamtansicht nur einmal geführt.</Text>
-        <ContextSwitcher />
+      <ContextSwitcher />
+      <TeamNavigation />
 
         <View style={styles.tabs}>
           <Pressable accessibilityRole="button" onPress={() => setSelectedTeamId(null)} style={[styles.tab, selectedTeamId === null && styles.tabActive]}>
@@ -254,7 +257,7 @@ export default function StatisticsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles=(colors:ReturnType<typeof useAppTheme>['colors'])=>StyleSheet.create({
   page: { backgroundColor: colors.canvas, minHeight: '100%', padding: 20, paddingBottom: 48 },
   shell: { alignSelf: 'center', maxWidth: 1040, width: '100%' },
   eyebrow: { color: colors.blue, fontSize: 11, fontWeight: '900', letterSpacing: 1.4, marginTop: 14 },

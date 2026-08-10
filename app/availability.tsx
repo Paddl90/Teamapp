@@ -6,7 +6,7 @@ import { ContextSwitcher } from '@/components/ContextSwitcher';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useWorkspace } from '@/features/workspace/WorkspaceProvider';
 import { supabase } from '@/lib/supabase';
-import { colors } from '@/theme/colors';
+import { useAppTheme } from '@/theme/ThemeProvider';
 
 type BlockView = { id: string; starts_at: string; ends_at: string; reason: string | null };
 type PlanRow = { team_id: string; player_total: number; player_available: number; coach_total: number; coach_available: number };
@@ -15,6 +15,7 @@ const toIso = (value: string) => new Date(value).toISOString();
 const formatDate = (value: string) => new Intl.DateTimeFormat('de-DE', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
 
 export default function AvailabilityScreen() {
+  const {colors}=useAppTheme(); const styles=createStyles(colors);
   const { isLoading: isAuthLoading, session } = useAuth();
   const { activeWorkspace, isLoading: isWorkspaceLoading } = useWorkspace();
   const [blocks, setBlocks] = useState<BlockView[]>([]);
@@ -102,7 +103,7 @@ export default function AvailabilityScreen() {
   </View></ScrollView>;
 }
 
-const styles = StyleSheet.create({
+const createStyles=(colors:ReturnType<typeof useAppTheme>['colors'])=>StyleSheet.create({
   page: { backgroundColor: colors.canvas, minHeight: '100%', padding: 20, paddingBottom: 48 }, shell: { alignSelf: 'center', maxWidth: 960, width: '100%' }, eyebrow: { color: colors.blue, fontSize: 11, fontWeight: '900', letterSpacing: 1.4, marginTop: 14 }, title: { color: colors.ink, fontSize: 34, fontWeight: '900', marginTop: 8 }, subtitle: { color: colors.muted, fontSize: 15, lineHeight: 22, marginTop: 8, maxWidth: 720 },
   card: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 18, borderWidth: 1, marginTop: 18, padding: 20 }, cardTitle: { color: colors.ink, fontSize: 19, fontWeight: '900' }, helper: { color: colors.muted, fontSize: 12, lineHeight: 18, marginTop: 4 }, columns: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 }, column: { flex: 1, minWidth: 230 }, label: { color: colors.ink, fontSize: 13, fontWeight: '800', marginBottom: 7, marginTop: 16 }, input: { borderColor: colors.border, borderRadius: 10, borderWidth: 1, color: colors.ink, fontSize: 15, paddingHorizontal: 13, paddingVertical: 12 }, primaryButton: { alignItems: 'center', backgroundColor: colors.ink, borderRadius: 12, marginTop: 18, minHeight: 48, padding: 14 }, primaryText: { color: colors.surface, fontSize: 14, fontWeight: '900' }, disabled: { opacity: 0.38 },
   blockRow: { alignItems: 'center', borderTopColor: colors.border, borderTopWidth: 1, flexDirection: 'row', justifyContent: 'space-between', marginTop: 16, paddingTop: 14 }, blockTime: { color: colors.ink, fontSize: 13, fontWeight: '800' }, deleteButton: { borderColor: '#fda29b', borderRadius: 8, borderWidth: 1, paddingHorizontal: 9, paddingVertical: 6 }, deleteText: { color: '#b42318', fontSize: 11, fontWeight: '800' },

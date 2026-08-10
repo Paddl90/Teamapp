@@ -6,7 +6,7 @@ import { ContextSwitcher } from '@/components/ContextSwitcher';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useWorkspace } from '@/features/workspace/WorkspaceProvider';
 import { supabase } from '@/lib/supabase';
-import { colors } from '@/theme/colors';
+import { useAppTheme } from '@/theme/ThemeProvider';
 
 const eventTypeLabels: Record<string, string> = {
   training: 'Training', match: 'Spiel', tournament: 'Turnier', meeting: 'Besprechung', other: 'Sonstiges',
@@ -45,6 +45,7 @@ const formatDate = (value: string) => new Intl.DateTimeFormat('de-DE', {
 }).format(new Date(value));
 
 export default function EventsScreen() {
+  const {colors}=useAppTheme(); const styles=useMemo(()=>createStyles(colors),[colors]);
   const router = useRouter();
   const scrollRef = useRef<ScrollView>(null);
   const { isLoading: isAuthLoading, session } = useAuth();
@@ -303,7 +304,7 @@ export default function EventsScreen() {
   </View></ScrollView>;
 }
 
-const styles = StyleSheet.create({
+const createStyles=(colors:ReturnType<typeof useAppTheme>['colors'])=>StyleSheet.create({
   page: { backgroundColor: colors.canvas, minHeight: '100%', padding: 20, paddingBottom: 48 }, shell: { alignSelf: 'center', maxWidth: 960, width: '100%' },
   eyebrow: { color: colors.blue, fontSize: 11, fontWeight: '900', letterSpacing: 1.4, marginTop: 14 }, title: { color: colors.ink, fontSize: 34, fontWeight: '900', marginTop: 8 }, subtitle: { color: colors.muted, fontSize: 15, lineHeight: 22, marginTop: 8, maxWidth: 720 },
   card: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 18, borderWidth: 1, marginTop: 18, padding: 20 }, cardTitle: { color: colors.ink, fontSize: 19, fontWeight: '900' }, label: { color: colors.ink, fontSize: 13, fontWeight: '800', marginBottom: 7, marginTop: 16 }, helper: { color: colors.muted, fontSize: 12, marginTop: 6 }, input: { borderColor: colors.border, borderRadius: 10, borderWidth: 1, color: colors.ink, fontSize: 15, paddingHorizontal: 13, paddingVertical: 12 }, notes: { minHeight: 74, textAlignVertical: 'top' }, columns: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 }, column: { flex: 1, minWidth: 230 },

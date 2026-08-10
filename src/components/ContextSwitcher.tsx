@@ -1,9 +1,10 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { useWorkspace } from '@/features/workspace/WorkspaceProvider';
-import { colors } from '@/theme/colors';
+import { useAppTheme } from '@/theme/ThemeProvider';
 
 export function ContextSwitcher() {
+  const {colors}=useAppTheme(); const styles=createStyles(colors);
   const { activeTeamId, activeWorkspace, contexts, selectTeam, selectWorkspace } = useWorkspace();
 
   if (!activeWorkspace) return null;
@@ -50,7 +51,7 @@ export function ContextSwitcher() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles=(colors:ReturnType<typeof useAppTheme>['colors'])=>StyleSheet.create({
   wrapper: { gap: 8, marginTop: 12 },
   row: { gap: 8 },
   workspaceButton: { borderColor: colors.border, borderRadius: 10, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 8 },

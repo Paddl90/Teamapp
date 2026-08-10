@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-import { colors } from '@/theme/colors';
+import { useAppTheme } from '@/theme/ThemeProvider';
 
 type FeatureCardProps = {
   eyebrow: string;
@@ -10,6 +10,7 @@ type FeatureCardProps = {
 };
 
 export function FeatureCard({ eyebrow, title, description, accent }: FeatureCardProps) {
+  const {colors}=useAppTheme(); const styles=createStyles(colors);
   return (
     <View style={styles.card}>
       <View style={[styles.marker, { backgroundColor: accent }]} />
@@ -20,7 +21,7 @@ export function FeatureCard({ eyebrow, title, description, accent }: FeatureCard
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles=(colors:ReturnType<typeof useAppTheme>['colors'])=>StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
     borderColor: colors.border,

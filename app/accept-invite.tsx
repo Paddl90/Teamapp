@@ -5,9 +5,10 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useWorkspace } from '@/features/workspace/WorkspaceProvider';
 import { supabase } from '@/lib/supabase';
-import { colors } from '@/theme/colors';
+import { useAppTheme } from '@/theme/ThemeProvider';
 
 export default function AcceptInviteScreen() {
+  const {colors}=useAppTheme(); const styles=createStyles(colors);
   const router = useRouter();
   const { isLoading: isAuthLoading, session } = useAuth();
   const { refresh } = useWorkspace();
@@ -62,7 +63,7 @@ export default function AcceptInviteScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles=(colors:ReturnType<typeof useAppTheme>['colors'])=>StyleSheet.create({
   page: { alignItems: 'center', backgroundColor: colors.canvas, flex: 1, justifyContent: 'center', padding: 20 },
   card: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 22, borderWidth: 1, maxWidth: 520, padding: 26, width: '100%' },
   eyebrow: { color: colors.blue, fontSize: 11, fontWeight: '900', letterSpacing: 1.4 },

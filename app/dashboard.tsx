@@ -1,12 +1,12 @@
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { ContextSwitcher } from '@/components/ContextSwitcher';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useWorkspace } from '@/features/workspace/WorkspaceProvider';
 import { supabase } from '@/lib/supabase';
-import { colors } from '@/theme/colors';
+import { useAppTheme } from '@/theme/ThemeProvider';
 
 type DashboardData = {
   playerCount: number;
@@ -25,6 +25,7 @@ type DashboardData = {
 const initialData: DashboardData = { playerCount: 0, coachCount: 0, openResponses: 0, nextEvent: null };
 
 export default function DashboardScreen() {
+  const {colors}=useAppTheme(); const styles=useMemo(()=>createStyles(colors),[colors]);
   const router = useRouter();
   const { demo } = useLocalSearchParams<{ demo?: string }>();
   const { isLoading, session, signOut } = useAuth();
@@ -171,7 +172,7 @@ export default function DashboardScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles=(colors:ReturnType<typeof useAppTheme>['colors'])=>StyleSheet.create({
   page: { backgroundColor: colors.canvas, minHeight: '100%', padding: 20 },
   shell: { alignSelf: 'center', maxWidth: 1040, width: '100%' },
   topbar: {

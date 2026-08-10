@@ -13,9 +13,10 @@ import {
 } from 'react-native';
 
 import { useAuth } from '@/features/auth/AuthProvider';
-import { colors } from '@/theme/colors';
+import { useAppTheme } from '@/theme/ThemeProvider';
 
 export default function RegisterScreen() {
+  const {colors}=useAppTheme(); const styles=createStyles(colors);
   const router = useRouter();
   const { isConfigured, session, signUpWithPassword } = useAuth();
   const [displayName, setDisplayName] = useState('');
@@ -87,6 +88,7 @@ type FieldProps = {
 };
 
 function Field({ label, value, onChangeText, placeholder, email, secure }: FieldProps) {
+  const {colors}=useAppTheme(); const styles=createStyles(colors);
   return (
     <View style={styles.field}>
       <Text style={styles.label}>{label}</Text>
@@ -104,7 +106,7 @@ function Field({ label, value, onChangeText, placeholder, email, secure }: Field
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles=(colors:ReturnType<typeof useAppTheme>['colors'])=>StyleSheet.create({
   page: { backgroundColor: colors.canvas, flex: 1 },
   scroll: { alignItems: 'center', flexGrow: 1, justifyContent: 'center', padding: 20 },
   card: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 24, borderWidth: 1, maxWidth: 480, padding: 28, width: '100%' },

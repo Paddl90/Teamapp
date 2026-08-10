@@ -3,10 +3,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { ContextSwitcher } from '@/components/ContextSwitcher';
+import { TeamNavigation } from '@/components/TeamNavigation';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useWorkspace } from '@/features/workspace/WorkspaceProvider';
 import { supabase } from '@/lib/supabase';
-import { colors } from '@/theme/colors';
+import { useAppTheme } from '@/theme/ThemeProvider';
 
 const positionLabels: Record<string, string> = { GK: 'Tor', CB: 'Innenverteidigung', FB: 'Außenverteidigung', DM: 'Defensives Mittelfeld', CM: 'Zentrales Mittelfeld', AM: 'Offensives Mittelfeld', W: 'Flügel', ST: 'Sturm' };
 const positions = Object.keys(positionLabels);
@@ -15,6 +16,7 @@ type PlayerView = { membershipId: string; name: string; teamIds: string[]; prima
 type TargetRow = { team_id: string; position_code: string; target_count: number };
 
 export default function SquadScreen() {
+  const {colors}=useAppTheme(); const styles=useMemo(()=>createStyles(colors),[colors]);
   const { isLoading: isAuthLoading, session } = useAuth();
   const { activeTeamId, activeWorkspace, isLoading: isWorkspaceLoading } = useWorkspace();
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(activeTeamId);
@@ -88,7 +90,7 @@ export default function SquadScreen() {
   if (!isWorkspaceLoading && !activeWorkspace) return <Redirect href="/setup" />;
 
   return <ScrollView contentContainerStyle={styles.page}><View style={styles.shell}>
-    <Text style={styles.eyebrow}>SAISON-KADERPLANUNG</Text><Text style={styles.title}>Positionen im Blick</Text><Text style={styles.subtitle}>Ein gemeinsamer Spielerpool für beliebig viele Teams. Haupt- und Nebenpositionen zeigen sofort, wo der Kader gut oder dünn besetzt ist.</Text><ContextSwitcher />
+    <Text style={styles.eyebrow}>SAISON-KADERPLANUNG</Text><Text style={styles.title}>Positionen im Blick</Text><Text style={styles.subtitle}>Ein gemeinsamer Spielerpool für beliebig viele Teams. Haupt- und Nebenpositionen zeigen sofort, wo der Kader gut oder dünn besetzt ist.</Text><ContextSwitcher /><TeamNavigation />
     <View style={styles.teamTabs}>{activeWorkspace?.teams.map((team) => <Pressable accessibilityRole="button" key={team.id} onPress={() => setSelectedTeamId(team.id)} style={[styles.teamTab, selectedTeamId === team.id && styles.teamTabActive]}><Text style={[styles.teamTabText, selectedTeamId === team.id && styles.teamTabTextActive]}>{team.name}</Text></Pressable>)}</View>
 
     <View style={styles.card}><Text style={styles.cardTitle}>Positionsmatrix · {selectedTeam?.name}</Text><Text style={styles.helper}>Ist zählt Haupt- und Nebenpositionen der dem Team zugeordneten Spieler.</Text>
@@ -104,7 +106,7 @@ export default function SquadScreen() {
   </View></ScrollView>;
 }
 
-const styles = StyleSheet.create({
+const createStyles=(colors:ReturnType<typeof useAppTheme>['colors'])=>StyleSheet.create({
   page: { backgroundColor: colors.canvas, minHeight: '100%', padding: 20, paddingBottom: 48 }, shell: { alignSelf: 'center', maxWidth: 1040, width: '100%' }, eyebrow: { color: colors.blue, fontSize: 11, fontWeight: '900', letterSpacing: 1.4, marginTop: 14 }, title: { color: colors.ink, fontSize: 34, fontWeight: '900', marginTop: 8 }, subtitle: { color: colors.muted, fontSize: 15, lineHeight: 22, marginTop: 8, maxWidth: 760 }, teamTabs: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 16 }, teamTab: { borderColor: colors.border, borderRadius: 10, borderWidth: 1, paddingHorizontal: 13, paddingVertical: 9 }, teamTabActive: { backgroundColor: colors.ink, borderColor: colors.ink }, teamTabText: { color: colors.muted, fontSize: 13, fontWeight: '800' }, teamTabTextActive: { color: colors.surface },
   card: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 18, borderWidth: 1, marginTop: 18, padding: 20 }, cardTitle: { color: colors.ink, fontSize: 19, fontWeight: '900' }, helper: { color: colors.muted, fontSize: 12, marginTop: 5 }, matrix: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 16 }, positionCard: { backgroundColor: colors.canvas, borderRadius: 12, minWidth: 150, padding: 13, flexGrow: 1, flexBasis: 180 }, positionCode: { color: colors.blue, fontSize: 12, fontWeight: '900' }, positionName: { color: colors.ink, fontSize: 13, fontWeight: '800', marginTop: 3 }, coverage: { color: colors.muted, fontSize: 12, marginTop: 8 }, status: { fontSize: 11, fontWeight: '900', marginTop: 5 }, ok: { color: colors.green }, under: { color: '#b42318' }, over: { color: colors.orange }, targetActions: { flexDirection: 'row', gap: 6, marginTop: 9 }, smallButton: { alignItems: 'center', backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 7, borderWidth: 1, height: 28, justifyContent: 'center', width: 32 },
   playerRow: { alignItems: 'center', borderTopColor: colors.border, borderTopWidth: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 12, justifyContent: 'space-between', paddingVertical: 14 }, playerName: { color: colors.ink, fontSize: 15, fontWeight: '900' }, playerTeams: { color: colors.muted, fontSize: 12, marginTop: 3 }, playerRight: { alignItems: 'flex-end' }, playerPositions: { color: colors.ink, fontSize: 13, fontWeight: '800' }, editText: { color: colors.blue, fontSize: 12, fontWeight: '800', marginTop: 5 }, label: { color: colors.ink, fontSize: 13, fontWeight: '800', marginBottom: 8, marginTop: 16 }, choices: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 }, choice: { borderColor: colors.border, borderRadius: 999, borderWidth: 1, paddingHorizontal: 13, paddingVertical: 8 }, choiceActive: { backgroundColor: colors.blue, borderColor: colors.blue }, choiceText: { color: colors.muted, fontSize: 12, fontWeight: '900' }, choiceTextActive: { color: colors.surface }, actions: { flexDirection: 'row', gap: 10, justifyContent: 'flex-end', marginTop: 18 }, cancelButton: { borderColor: colors.border, borderRadius: 11, borderWidth: 1, padding: 13 }, cancelText: { color: colors.ink, fontWeight: '800' }, saveButton: { backgroundColor: colors.ink, borderRadius: 11, minWidth: 180, padding: 13 }, saveText: { color: colors.surface, fontWeight: '900', textAlign: 'center' }, disabled: { opacity: 0.4 }, error: { color: '#b42318', fontSize: 13, marginTop: 14 },
