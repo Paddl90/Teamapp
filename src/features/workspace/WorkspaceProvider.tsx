@@ -13,6 +13,8 @@ export type WorkspaceContext = {
   id: string;
   clubId: string;
   clubName: string;
+  primaryColor: string;
+  accentColor: string;
   seasonId: string;
   seasonName: string;
   cohortId: string;
@@ -75,7 +77,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
 
     for (const membership of memberships ?? []) {
       const [{ data: club }, { data: season }, { data: clubRoleRows }, { data: assignmentRows }] = await Promise.all([
-        client.from('clubs').select('name').eq('id', membership.club_id).single(),
+        client.from('clubs').select('name,primary_color,accent_color').eq('id', membership.club_id).single(),
         client
           .from('seasons')
           .select('id, name')
@@ -111,6 +113,8 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
           id: `${membership.club_id}:${season.id}:${cohort.id}`,
           clubId: membership.club_id,
           clubName: club.name,
+          primaryColor: club.primary_color,
+          accentColor: club.accent_color,
           seasonId: season.id,
           seasonName: season.name,
           cohortId: cohort.id,

@@ -6,7 +6,7 @@ import { ContextSwitcher } from '@/components/ContextSwitcher';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useWorkspace } from '@/features/workspace/WorkspaceProvider';
 import { supabase } from '@/lib/supabase';
-import { colors } from '@/theme/colors';
+import { useAppTheme } from '@/theme/ThemeProvider';
 
 const formations = ['4-4-2', '4-3-3', '4-2-3-1', '3-5-2'];
 const positions = ['GK', 'CB', 'FB', 'DM', 'CM', 'AM', 'W', 'ST'];
@@ -19,6 +19,7 @@ type Assignment = { squadRole: 'starting' | 'bench'; position: string | null };
 const formatDate = (value: string) => new Intl.DateTimeFormat('de-DE', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
 
 export default function MatchdayScreen() {
+  const {colors}=useAppTheme(); const styles=createStyles(colors);
   const router = useRouter();
   const { isLoading: isAuthLoading, session } = useAuth();
   const { activeWorkspace, isLoading: isWorkspaceLoading } = useWorkspace();
@@ -114,6 +115,6 @@ export default function MatchdayScreen() {
   </View></ScrollView>;
 }
 
-const styles = StyleSheet.create({
+const createStyles=(colors:ReturnType<typeof useAppTheme>['colors'])=>StyleSheet.create({
   page:{backgroundColor:colors.canvas,minHeight:'100%',padding:20,paddingBottom:48},shell:{alignSelf:'center',maxWidth:1040,width:'100%'},eyebrow:{color:colors.blue,fontSize:11,fontWeight:'900',letterSpacing:1.4,marginTop:14},title:{color:colors.ink,fontSize:34,fontWeight:'900',marginTop:8},subtitle:{color:colors.muted,fontSize:15,lineHeight:22,marginTop:8,maxWidth:760},card:{backgroundColor:colors.surface,borderColor:colors.border,borderRadius:18,borderWidth:1,marginTop:18,padding:20},cardTitle:{color:colors.ink,fontSize:19,fontWeight:'900'},helper:{color:colors.muted,fontSize:12,marginTop:5},label:{color:colors.ink,fontSize:13,fontWeight:'800',marginBottom:8,marginTop:16},input:{borderColor:colors.border,borderRadius:10,borderWidth:1,color:colors.ink,fontSize:15,paddingHorizontal:13,paddingVertical:12},choices:{flexDirection:'row',flexWrap:'wrap',gap:8,marginTop:10},choice:{borderColor:colors.border,borderRadius:999,borderWidth:1,paddingHorizontal:12,paddingVertical:8},choiceActive:{backgroundColor:colors.blue,borderColor:colors.blue},choiceText:{color:colors.muted,fontSize:12,fontWeight:'800'},choiceTextActive:{color:colors.surface},cardHeader:{alignItems:'center',flexDirection:'row',justifyContent:'space-between'},counter:{color:colors.blue,fontSize:12,fontWeight:'900'},playerRow:{borderTopColor:colors.border,borderTopWidth:1,paddingVertical:14},playerName:{color:colors.ink,fontSize:15,fontWeight:'900'},playerMeta:{color:colors.muted,fontSize:12,marginTop:3},nominate:{alignSelf:'flex-start',borderColor:colors.border,borderRadius:9,borderWidth:1,marginTop:9,paddingHorizontal:10,paddingVertical:7},nominateActive:{backgroundColor:colors.ink,borderColor:colors.ink},nominateText:{color:colors.muted,fontSize:12,fontWeight:'800'},nominateTextActive:{color:colors.surface},assignmentControls:{marginTop:8},miniChoice:{borderColor:colors.border,borderRadius:8,borderWidth:1,paddingHorizontal:10,paddingVertical:6},miniText:{color:colors.muted,fontSize:11,fontWeight:'800'},positions:{flexDirection:'row',flexWrap:'wrap',gap:6,marginTop:8},position:{backgroundColor:colors.canvas,borderRadius:7,paddingHorizontal:9,paddingVertical:6},positionActive:{backgroundColor:colors.blue},positionText:{color:colors.muted,fontSize:11,fontWeight:'900'},pitch:{alignItems:'center',backgroundColor:'#287a4b',borderColor:'#dff7ea',borderRadius:16,borderWidth:2,flexDirection:'row',flexWrap:'wrap',gap:12,justifyContent:'center',marginTop:15,minHeight:260,padding:20},pitchPlayer:{alignItems:'center',backgroundColor:colors.surface,borderRadius:10,minWidth:110,padding:9},pitchPosition:{color:colors.blue,fontSize:11,fontWeight:'900'},pitchName:{color:colors.ink,fontSize:11,fontWeight:'800',marginTop:3},benchTitle:{color:colors.ink,fontSize:13,fontWeight:'900',marginTop:15},actions:{flexDirection:'row',flexWrap:'wrap',gap:10,justifyContent:'flex-end',marginTop:18},primaryButton:{alignItems:'center',backgroundColor:colors.ink,borderRadius:11,padding:13},primaryText:{color:colors.surface,fontWeight:'900'},secondaryButton:{borderColor:colors.border,borderRadius:11,borderWidth:1,padding:13},secondaryText:{color:colors.ink,fontWeight:'800'},success:{color:colors.green,fontSize:13,fontWeight:'900',marginTop:12},error:{color:'#b42318',fontSize:13,marginTop:12},
 });

@@ -2,14 +2,14 @@ import { type Href, usePathname, useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import { useAuth } from '@/features/auth/AuthProvider';
-import { colors } from '@/theme/colors';
+import { useAppTheme } from '@/theme/ThemeProvider';
 
 const items = [
   { label: 'Start', path: '/dashboard', routes: ['/dashboard'] },
   { label: 'Kalender', path: '/events', routes: ['/events', '/availability'] },
   { label: 'Team', path: '/members', routes: ['/members', '/squad', '/statistics'] },
   { label: 'Spieltag', path: '/matchday', routes: ['/matchday', '/match-report'] },
-  { label: 'Mehr', path: '/notifications', routes: ['/notifications', '/training', '/funds', '/accept-invite'] },
+  { label: 'Mehr', path: '/more', routes: ['/more', '/notifications', '/training', '/funds', '/accept-invite', '/settings'] },
 ] as const;
 
 const hiddenRoutes = ['/', '/sign-in', '/register', '/setup'];
@@ -18,6 +18,8 @@ export function MainNavigation() {
   const router = useRouter();
   const pathname = usePathname();
   const { session } = useAuth();
+  const {colors}=useAppTheme();
+  const styles=createStyles(colors);
   const { width } = useWindowDimensions();
   const isDesktop = width >= 900;
 
@@ -53,7 +55,7 @@ export function MainNavigation() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles=(colors:ReturnType<typeof useAppTheme>['colors'])=>StyleSheet.create({
   navigation: { backgroundColor: colors.surface, borderColor: colors.border },
   sidebar: { borderRightWidth: 1, paddingHorizontal: 16, paddingVertical: 24, width: 220 },
   bottomBar: { borderTopWidth: 1, paddingBottom: 6, paddingHorizontal: 6, paddingTop: 7 },

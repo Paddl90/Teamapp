@@ -12,9 +12,10 @@ import {
 } from 'react-native';
 
 import { useAuth } from '@/features/auth/AuthProvider';
-import { colors } from '@/theme/colors';
+import { useAppTheme } from '@/theme/ThemeProvider';
 
 export default function SignInScreen() {
+  const {colors}=useAppTheme(); const styles=createStyles(colors);
   const router = useRouter();
   const { isConfigured, isLoading, session, signInWithPassword } = useAuth();
   const [email, setEmail] = useState('');
@@ -111,7 +112,7 @@ export default function SignInScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles=(colors:ReturnType<typeof useAppTheme>['colors'])=>StyleSheet.create({
   page: {
     alignItems: 'center',
     backgroundColor: colors.canvas,

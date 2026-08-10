@@ -3,18 +3,23 @@ import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import { MainNavigation } from '@/components/MainNavigation';
-import { colors } from '@/theme/colors';
+import { ThemeProvider, useAppTheme } from '@/theme/ThemeProvider';
 import { AuthProvider } from '@/features/auth/AuthProvider';
 import { WorkspaceProvider } from '@/features/workspace/WorkspaceProvider';
 
 export default function RootLayout() {
+  return <AuthProvider><WorkspaceProvider><ThemeProvider><ThemedLayout /></ThemeProvider></WorkspaceProvider></AuthProvider>;
+}
+
+function ThemedLayout() {
   const { width } = useWindowDimensions();
+  const {colors,isDark}=useAppTheme();
   const isDesktop = width >= 900;
+  const styles=createStyles(colors);
 
   return (
-    <AuthProvider>
-      <WorkspaceProvider>
-        <StatusBar style="dark" />
+        <>
+        <StatusBar style={isDark?'light':'dark'} />
         <View style={[styles.app, isDesktop ? styles.desktop : styles.mobile]}>
           {isDesktop ? <MainNavigation /> : null}
           <View style={styles.content}>
@@ -42,17 +47,18 @@ export default function RootLayout() {
               <Stack.Screen name="training" options={{ title: 'Individuelles Training' }} />
               <Stack.Screen name="notifications" options={{ title: 'Benachrichtigungen' }} />
               <Stack.Screen name="accept-invite" options={{ title: 'Einladung annehmen' }} />
+              <Stack.Screen name="more" options={{ title: 'Mehr' }} />
+              <Stack.Screen name="settings" options={{ title: 'Einstellungen' }} />
               <Stack.Screen name="dashboard" options={{ headerShown: false }} />
             </Stack>
           </View>
           {!isDesktop ? <MainNavigation /> : null}
         </View>
-      </WorkspaceProvider>
-    </AuthProvider>
+        </>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   app: { backgroundColor: colors.canvas, flex: 1 },
   desktop: { flexDirection: 'row' },
   mobile: { flexDirection: 'column' },

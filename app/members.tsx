@@ -11,10 +11,11 @@ import {
 } from 'react-native';
 
 import { ContextSwitcher } from '@/components/ContextSwitcher';
+import { TeamNavigation } from '@/components/TeamNavigation';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useWorkspace } from '@/features/workspace/WorkspaceProvider';
 import { supabase } from '@/lib/supabase';
-import { colors } from '@/theme/colors';
+import { useAppTheme } from '@/theme/ThemeProvider';
 
 const roleLabels: Record<string, string> = {
   player: 'Spieler',
@@ -33,6 +34,7 @@ type MemberView = {
   status: string;
   connected: boolean;
   claimCode: string | null;
+  isCurrentUser: boolean;
   clubRoles: string[];
   teams: Array<{ id: string; name: string; roles: string[] }>;
 };
@@ -41,6 +43,7 @@ type InvitationView = { id: string; email: string; code: string; status: string 
 type GuardianLink = { id: string; guardian_membership_id: string; child_membership_id: string };
 
 export default function MembersScreen() {
+  const {colors}=useAppTheme(); const styles=useMemo(()=>createStyles(colors),[colors]);
   const { isLoading: isAuthLoading, session } = useAuth();
   const { activeWorkspace, isLoading: isWorkspaceLoading } = useWorkspace();
   const [members, setMembers] = useState<MemberView[]>([]);
@@ -125,6 +128,7 @@ export default function MembersScreen() {
         status: membership.status,
         connected: Boolean(membership.profile_id),
         claimCode: (claimResult.data ?? []).find((row) => row.membership_id === membership.id)?.code ?? null,
+        isCurrentUser: membership.profile_id === session?.user.id,
         clubRoles: (clubRoleRows ?? []).filter((row) => row.membership_id === membership.id).map((row) => row.role),
         teams: (teamMembershipRows ?? [])
           .filter((row) => row.membership_id === membership.id && teamById.has(row.team_id))
@@ -139,7 +143,7 @@ export default function MembersScreen() {
     setInvitations((invitationResult.data ?? []) as InvitationView[]);
     setGuardianLinks((guardianResult.data ?? []) as GuardianLink[]);
     setIsLoading(false);
-  }, [activeWorkspace?.id, canManage]);
+  }, [activeWorkspace?.id, canManage, session?.user.id]);
 
   useEffect(() => {
     void load();
@@ -149,6 +153,7 @@ export default function MembersScreen() {
     () => Object.entries(assignments).filter(([, roles]) => roles.length > 0),
     [assignments],
   );
+  const ownMember=members.find((member)=>member.isCurrentUser);
 
   const toggleRole = (teamId: string, role: string) => {
     setAssignments((current) => {
@@ -287,6 +292,9 @@ export default function MembersScreen() {
         <Text style={styles.title}>Ein Account, mehrere Aufgaben</Text>
         <Text style={styles.subtitle}>Rollen werden pro Team vergeben. Dieselbe Person kann dadurch gleichzeitig Spieler und Trainer in unterschiedlichen Teams sein.</Text>
         <ContextSwitcher />
+        <TeamNavigation />
+
+        {canManage&&ownMember&&ownMember.teams.length===0?<View style={styles.notice}><View><Text style={styles.noticeTitle}>Dein Account ist noch keinem Team zugeordnet</Text><Text style={styles.helper}>Ordne dir eine Trainer- oder Spielerrolle zu, damit du bei passenden Terminen direkt antworten kannst.</Text></View><Pressable accessibilityRole="button" onPress={()=>beginEdit(ownMember)} style={styles.noticeButton}><Text style={styles.noticeButtonText}>Jetzt zuordnen</Text></Pressable></View>:null}
 
         {canManage ? (
           <View style={styles.card}>
@@ -509,7 +517,7 @@ export default function MembersScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles=(colors:ReturnType<typeof useAppTheme>['colors'])=>StyleSheet.create({
   page: { backgroundColor: colors.canvas, minHeight: '100%', padding: 20, paddingBottom: 48 },
   shell: { alignSelf: 'center', maxWidth: 920, width: '100%' },
   eyebrow: { color: colors.blue, fontSize: 11, fontWeight: '900', letterSpacing: 1.4, marginTop: 14 },
@@ -542,6 +550,7 @@ const styles = StyleSheet.create({
   connected: { color: colors.green, fontWeight: '800' },
   unconnected: { color: colors.orange, fontWeight: '800' },
   claimRow: { gap: 4, marginTop: 8 },
+  notice:{alignItems:'center',backgroundColor:colors.blueSoft,borderColor:colors.blue,borderRadius:14,borderWidth:1,flexDirection:'row',flexWrap:'wrap',gap:12,justifyContent:'space-between',marginTop:16,padding:16},noticeTitle:{color:colors.ink,fontSize:15,fontWeight:'900'},noticeButton:{backgroundColor:colors.blue,borderRadius:10,paddingHorizontal:14,paddingVertical:10},noticeButtonText:{color:'#fff',fontSize:12,fontWeight:'900'},
   editButton: { alignSelf: 'flex-start', marginTop: 8, paddingVertical: 4 },
   editButtonText: { color: colors.blue, fontSize: 12, fontWeight: '800' },
   memberTeams: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },

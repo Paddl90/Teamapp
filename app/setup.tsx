@@ -15,7 +15,7 @@ import {
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useWorkspace } from '@/features/workspace/WorkspaceProvider';
 import { supabase } from '@/lib/supabase';
-import { colors } from '@/theme/colors';
+import { useAppTheme } from '@/theme/ThemeProvider';
 
 function seasonDefaults() {
   const today = new Date();
@@ -40,6 +40,7 @@ function slugify(value: string) {
 }
 
 export default function SetupScreen() {
+  const {colors}=useAppTheme(); const styles=createStyles(colors);
   const router = useRouter();
   const { isLoading, session } = useAuth();
   const { refresh } = useWorkspace();
@@ -187,6 +188,7 @@ export default function SetupScreen() {
 }
 
 function Section({ number, title, children }: { number: string; title: string; children: React.ReactNode }) {
+  const {colors}=useAppTheme(); const styles=createStyles(colors);
   return (
     <View style={styles.section}>
       <View style={styles.sectionHeader}>
@@ -199,6 +201,7 @@ function Section({ number, title, children }: { number: string; title: string; c
 }
 
 function Field({ label, containerStyle, ...inputProps }: { label: string; containerStyle?: object } & React.ComponentProps<typeof TextInput>) {
+  const {colors}=useAppTheme(); const styles=createStyles(colors);
   return (
     <View style={[styles.field, containerStyle]}>
       <Text style={styles.label}>{label}</Text>
@@ -207,7 +210,7 @@ function Field({ label, containerStyle, ...inputProps }: { label: string; contai
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles=(colors:ReturnType<typeof useAppTheme>['colors'])=>StyleSheet.create({
   page: { backgroundColor: colors.canvas, flex: 1 },
   scroll: { padding: 20, paddingBottom: 48 },
   shell: { alignSelf: 'center', maxWidth: 820, width: '100%' },

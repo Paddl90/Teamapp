@@ -6,7 +6,7 @@ import { ContextSwitcher } from '@/components/ContextSwitcher';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useWorkspace } from '@/features/workspace/WorkspaceProvider';
 import { supabase } from '@/lib/supabase';
-import { colors } from '@/theme/colors';
+import { useAppTheme } from '@/theme/ThemeProvider';
 
 const activityLabels: Record<string, string> = {
   running: 'Laufen', stability: 'Stabilisation', strength: 'Kraft', mobility: 'Beweglichkeit',
@@ -21,6 +21,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 const inSevenDays = () => { const date = new Date(); date.setDate(date.getDate() + 7); return date.toISOString().slice(0, 10); };
 
 export default function TrainingScreen() {
+  const {colors}=useAppTheme(); const styles=createStyles(colors);
   const { isLoading: isAuthLoading, session } = useAuth();
   const { activeWorkspace, isLoading: isWorkspaceLoading } = useWorkspace();
   const [teamId, setTeamId] = useState<string | null>(null);
@@ -144,6 +145,6 @@ export default function TrainingScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles=(colors:ReturnType<typeof useAppTheme>['colors'])=>StyleSheet.create({
   page:{backgroundColor:colors.canvas,minHeight:'100%',padding:20,paddingBottom:48},shell:{alignSelf:'center',maxWidth:960,width:'100%'},eyebrow:{color:colors.blue,fontSize:11,fontWeight:'900',letterSpacing:1.4,marginTop:14},title:{color:colors.ink,fontSize:34,fontWeight:'900',marginTop:8},subtitle:{color:colors.muted,fontSize:15,lineHeight:22,marginTop:8},tabs:{flexDirection:'row',flexWrap:'wrap',gap:8,marginTop:16},tab:{borderColor:colors.border,borderRadius:999,borderWidth:1,paddingHorizontal:12,paddingVertical:8},active:{backgroundColor:colors.ink,borderColor:colors.ink},activeText:{color:colors.surface},card:{backgroundColor:colors.surface,borderColor:colors.border,borderRadius:18,borderWidth:1,marginTop:18,padding:20},cardTitle:{color:colors.ink,fontSize:19,fontWeight:'900'},label:{color:colors.ink,fontSize:13,fontWeight:'800',marginBottom:7,marginTop:14},choices:{flexDirection:'row',flexWrap:'wrap',gap:8},choice:{borderColor:colors.border,borderRadius:999,borderWidth:1,paddingHorizontal:11,paddingVertical:8},choiceText:{color:colors.muted,fontSize:12,fontWeight:'800'},input:{borderColor:colors.border,borderRadius:10,borderWidth:1,color:colors.ink,padding:12},columns:{flexDirection:'row',flexWrap:'wrap',gap:12},column:{flex:1,minWidth:220},consent:{borderColor:colors.border,borderRadius:10,borderWidth:1,marginTop:15,padding:12},consentActive:{backgroundColor:colors.blueSoft,borderColor:colors.blue},consentText:{color:colors.ink,fontSize:13,fontWeight:'800'},helper:{color:colors.muted,fontSize:11,lineHeight:17,marginTop:7},primary:{alignItems:'center',backgroundColor:colors.ink,borderRadius:11,marginTop:15,padding:13},primaryText:{color:colors.surface,fontWeight:'900'},loader:{marginTop:20},row:{alignItems:'center',borderTopColor:colors.border,borderTopWidth:1,flexDirection:'row',flexWrap:'wrap',gap:12,justifyContent:'space-between',paddingVertical:14},rowMain:{flex:1,minWidth:240},rowTitle:{color:colors.ink,fontSize:14,fontWeight:'900'},meta:{color:colors.muted,fontSize:11,lineHeight:17,marginTop:3},actions:{flexDirection:'row',flexWrap:'wrap',gap:6},statusButton:{borderColor:colors.border,borderRadius:8,borderWidth:1,padding:7},statusText:{color:colors.muted,fontSize:11,fontWeight:'800'},empty:{color:colors.faint,marginTop:16},error:{color:'#b42318',fontSize:13,marginTop:14},
 });

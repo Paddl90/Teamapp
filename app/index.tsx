@@ -2,31 +2,16 @@ import { useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { FeatureCard } from '@/components/FeatureCard';
-import { colors } from '@/theme/colors';
-
-const features = [
-  {
-    eyebrow: 'BEREICHE & TEAMS',
-    title: 'Beliebig viele Teams gemeinsam führen',
-    description: 'Ein gemeinsamer Mitgliederpool, ohne starre Altersklassen oder Teamgrenzen.',
-    accent: colors.blue,
-  },
-  {
-    eyebrow: 'PLANUNG',
-    title: 'Gute Zeitfenster erkennen',
-    description: 'Spieler-, Torhüter- und Trainerverfügbarkeit auf einen Blick.',
-    accent: colors.green,
-  },
-  {
-    eyebrow: 'SPIELTAG',
-    title: 'Vom Kader bis zur Statistik',
-    description: 'Nominierung, Aufstellung und Spielereignisse in einem Ablauf.',
-    accent: colors.orange,
-  },
-] as const;
+import { useAppTheme } from '@/theme/ThemeProvider';
 
 export default function HomeScreen() {
+  const {colors}=useAppTheme(); const styles=createStyles(colors);
   const router = useRouter();
+  const features = [
+    { eyebrow:'BEREICHE & TEAMS',title:'Beliebig viele Teams gemeinsam führen',description:'Ein gemeinsamer Mitgliederpool, ohne starre Altersklassen oder Teamgrenzen.',accent:colors.blue },
+    { eyebrow:'PLANUNG',title:'Gute Zeitfenster erkennen',description:'Spieler-, Torhüter- und Trainerverfügbarkeit auf einen Blick.',accent:colors.green },
+    { eyebrow:'SPIELTAG',title:'Vom Kader bis zur Statistik',description:'Nominierung, Aufstellung und Spielereignisse in einem Ablauf.',accent:colors.orange },
+  ] as const;
 
   return (
     <ScrollView contentContainerStyle={styles.page}>
@@ -88,7 +73,7 @@ export default function HomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles=(colors:ReturnType<typeof useAppTheme>['colors'])=>StyleSheet.create({
   page: {
     minHeight: '100%',
     backgroundColor: colors.canvas,
