@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { ContextSwitcher } from '@/components/ContextSwitcher';
+import { FootballPitch } from '@/components/FootballPitch';
 import { TeamNavigation } from '@/components/TeamNavigation';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useWorkspace } from '@/features/workspace/WorkspaceProvider';
@@ -22,6 +23,7 @@ export default function SquadScreen() {
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(activeTeamId);
   const [players, setPlayers] = useState<PlayerView[]>([]);
   const [targets, setTargets] = useState<TargetRow[]>([]);
+  const [pitchLayout,setPitchLayout]=useState<Record<string,{x:number;y:number}>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
   const [primary, setPrimary] = useState<string | null>(null);
   const [secondary, setSecondary] = useState<string | null>(null);
@@ -44,11 +46,12 @@ export default function SquadScreen() {
     if (membershipError) { setError(membershipError.message); setIsLoading(false); return; }
     const membershipIds = (membershipRows ?? []).map((row) => row.id);
     const profileIds = (membershipRows ?? []).map((row) => row.profile_id).filter((id): id is string => Boolean(id));
-    const [profilesResult, assignmentsResult, positionsResult, targetsResult] = await Promise.all([
+    const [profilesResult, assignmentsResult, positionsResult, targetsResult,layoutResult] = await Promise.all([
       profileIds.length ? supabase.from('profiles').select('id, display_name').in('id', profileIds) : Promise.resolve({ data: [] }),
       membershipIds.length ? supabase.from('team_memberships').select('id, membership_id, team_id, team_membership_roles(role)').in('membership_id', membershipIds) : Promise.resolve({ data: [] }),
       membershipIds.length ? supabase.from('member_positions').select('membership_id, position_code, priority').in('membership_id', membershipIds) : Promise.resolve({ data: [] }),
       supabase.from('team_position_targets').select('team_id, position_code, target_count').in('team_id', activeWorkspace.teams.map((team) => team.id)),
+      selectedTeamId?supabase.from('team_player_layouts').select('membership_id,x_percent,y_percent').eq('team_id',selectedTeamId):Promise.resolve({data:[]}),
     ]);
     const playerAssignments = (assignmentsResult.data ?? []).filter((row) => ((row.team_membership_roles ?? []) as Array<{ role: string }>).some((role) => role.role === 'player'));
     const playerMembershipIds = new Set(playerAssignments.map((row) => row.membership_id));
@@ -62,8 +65,8 @@ export default function SquadScreen() {
         secondary: memberPositions.find((row) => row.priority === 'secondary')?.position_code ?? null,
       };
     }));
-    setTargets((targetsResult.data ?? []) as TargetRow[]); setIsLoading(false);
-  }, [activeWorkspace?.id]);
+    setTargets((targetsResult.data ?? []) as TargetRow[]);setPitchLayout(Object.fromEntries((layoutResult.data??[]).map((row)=>[row.membership_id,{x:Number(row.x_percent),y:Number(row.y_percent)}]))); setIsLoading(false);
+  }, [activeWorkspace?.id,selectedTeamId]);
 
   useEffect(() => { void load(); }, [load]);
   const selectedTeam = activeWorkspace?.teams.find((team) => team.id === selectedTeamId);
@@ -71,6 +74,10 @@ export default function SquadScreen() {
 
   const targetFor = (code: string) => targets.find((row) => row.team_id === selectedTeamId && row.position_code === code)?.target_count ?? 1;
   const countFor = (code: string) => teamPlayers.filter((player) => player.primary === code || player.secondary === code).length;
+  const defaultCoordinate=(player:PlayerView,index:number)=>{const row=Math.floor(index/4);const column=index%4;const byPosition:Record<string,number>={GK:88,CB:72,FB:68,DM:56,CM:48,AM:37,W:30,ST:18};return {x:14+column*24,y:byPosition[player.primary??'CM']??Math.max(18,82-row*15)}};
+  const pitchPlayers=teamPlayers.map((player,index)=>({id:player.membershipId,name:player.name,label:player.primary??'offen',...(pitchLayout[player.membershipId]??defaultCoordinate(player,index))}));
+  const movePitchPlayer=useCallback((id:string,x:number,y:number)=>setPitchLayout((current)=>({...current,[id]:{x,y}})),[]);
+  const savePitchLayout=async()=>{if(!supabase||!selectedTeamId)return;setIsSubmitting(true);setError(null);const {error:layoutError}=await supabase.rpc('save_team_player_layout',{target_team_id:selectedTeamId,player_layout:pitchPlayers.map((player)=>({membership_id:player.id,x_percent:player.x,y_percent:player.y}))});setIsSubmitting(false);if(layoutError)setError(layoutError.message);else await load()};
 
   const beginEdit = (player: PlayerView) => { setEditingId(player.membershipId); setPrimary(player.primary); setSecondary(player.secondary); setError(null); };
   const savePositions = async () => {
@@ -96,6 +103,8 @@ export default function SquadScreen() {
     <View style={styles.card}><Text style={styles.cardTitle}>Positionsmatrix · {selectedTeam?.name}</Text><Text style={styles.helper}>Ist zählt Haupt- und Nebenpositionen der dem Team zugeordneten Spieler.</Text>
       <View style={styles.matrix}>{positions.map((code) => { const actual = countFor(code); const target = targetFor(code); const status = actual < target ? 'under' : actual > target ? 'over' : 'ok'; return <View key={code} style={styles.positionCard}><Text style={styles.positionCode}>{code}</Text><Text style={styles.positionName}>{positionLabels[code]}</Text><Text style={styles.coverage}>{actual} Ist / {target} Soll</Text><Text style={[styles.status, status === 'ok' ? styles.ok : status === 'under' ? styles.under : styles.over]}>{status === 'ok' ? 'Passend' : status === 'under' ? `${target - actual} fehlt` : `${actual - target} zusätzlich`}</Text>{canManageSelected ? <View style={styles.targetActions}><Pressable accessibilityRole="button" onPress={() => changeTarget(code, -1)} style={styles.smallButton}><Text>−</Text></Pressable><Pressable accessibilityRole="button" onPress={() => changeTarget(code, 1)} style={styles.smallButton}><Text>+</Text></Pressable></View> : null}</View>; })}</View>
     </View>
+
+    <View style={styles.card}><Text style={styles.cardTitle}>Kader auf dem Feld · {selectedTeam?.name}</Text><Text style={styles.helper}>Alle Spieler frei verschieben. Diese Saisonansicht ist unabhängig von einzelnen Spieltagen.</Text><FootballPitch editable={canManageSelected} onMove={movePitchPlayer} players={pitchPlayers}/>{canManageSelected?<Pressable accessibilityRole="button" disabled={isSubmitting} onPress={savePitchLayout} style={styles.saveButton}>{isSubmitting?<ActivityIndicator color={colors.surface}/>:<Text style={styles.saveText}>Feldpositionen speichern</Text>}</Pressable>:null}</View>
 
     <View style={styles.card}><Text style={styles.cardTitle}>Gemeinsamer Spielerpool</Text>{isLoading ? <ActivityIndicator color={colors.blue} /> : null}
       {players.map((player) => <View key={player.membershipId} style={styles.playerRow}><View><Text style={styles.playerName}>{player.name}</Text><Text style={styles.playerTeams}>{player.teamIds.map((id) => activeWorkspace?.teams.find((team) => team.id === id)?.name).join(' · ')}</Text></View><View style={styles.playerRight}><Text style={styles.playerPositions}>{player.primary ? `${player.primary}${player.secondary ? ` / ${player.secondary}` : ''}` : 'Position offen'}</Text>{canManageSelected && player.teamIds.includes(selectedTeamId ?? '') ? <Pressable accessibilityRole="button" onPress={() => beginEdit(player)}><Text style={styles.editText}>Positionen bearbeiten</Text></Pressable> : null}</View></View>)}
